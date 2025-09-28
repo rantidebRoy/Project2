@@ -32,10 +32,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 
 
 // Define destination routes as strings for navigation
-private const val AUTH_ROUTE = "auth_screen"
+//private const val AUTH_ROUTE = "auth_screen"
+//private const val MAIN_APP_ROUTE = "main_app"
+//private const val TIMER_ROUTE = "timer_screen"
+//
+//private const val FLASHCARD_ROUTE = "flashcard_screen"
+
+private const val WELCOME_ROUTE = "welcome_screen" // NEW ROUTE
+private const val LOGIN_ROUTE = "login_screen"     // NEW ROUTE
+private const val SIGNUP_ROUTE = "signup_screen"   // NEW ROUTE
 private const val MAIN_APP_ROUTE = "main_app"
 private const val TIMER_ROUTE = "timer_screen"
-
 private const val FLASHCARD_ROUTE = "flashcard_screen"
 
 // The mock definitions for Flashcard, FlashcardViewModel, TimerModel, TimerScreen,
@@ -88,71 +95,103 @@ class LoginViewModelFactory(private val sessionManager: SessionManager) : ViewMo
 fun FlashcardAppNavigation(sessionManager: SessionManager) {
     val navController = rememberNavController()
 
-    // Determine the starting destination: AuthScreen if not logged in, MainApp otherwise
-    val startDestination = if (sessionManager.isLoggedIn()) MAIN_APP_ROUTE else AUTH_ROUTE
+    // --- 1. Define Destinations and ViewModels ---
+
+    // Determine the starting destination:
+    // If logged in, go to MainApp. If not, go to the Welcome screen.
+    val startDestination = if (sessionManager.isLoggedIn()) MAIN_APP_ROUTE else WELCOME_ROUTE
 
     // ViewModel for authentication, injected with the session manager
     val loginViewModel: LoginViewModel = viewModel(
         factory = LoginViewModelFactory(sessionManager)
     )
 
-    // ViewModel for the main flashcard logic (assuming this is your main data model)
-    // FlashcardViewModel is expected to be defined in FlashcardViewModel.kt
+    // ViewModels for the main application features
     val flashcardViewModel: FlashcardViewModel = viewModel()
-
-    // ViewModel for the timer
-    // TimerModel is expected to be defined in TimerModel.kt
     val timerModel: TimerModel = viewModel()
 
-    // Define navigation graph
+    // --- 2. Define Navigation Graph ---
+
     NavHost(
         navController = navController,
         startDestination = startDestination
     ) {
-        // --- 1. Authentication Screen ---
-        composable(AUTH_ROUTE) {
-            // AuthScreen is expected to be defined in AuthScreen.kt
-            AuthScreen(
+
+        // --- A. WELCOME Screen (New Entry Point) ---
+        composable(WELCOME_ROUTE) {
+            WelcomeScreen(
+                onNavigateToLogin = { navController.navigate(LOGIN_ROUTE) },
+                onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) }
+            )
+        }
+
+        // --- B. LOGIN Screen ---
+        composable(LOGIN_ROUTE) {
+            LoginScreen(
                 viewModel = loginViewModel,
                 onLoginSuccess = {
-                    // This callback is triggered on successful sign-in/up
-                    // The ViewModel already saves the state, so we just navigate
+                    // Navigate to MainApp and clear the entire authentication stack
                     navController.navigate(MAIN_APP_ROUTE) {
-                        popUpTo(AUTH_ROUTE) { inclusive = true } // Remove auth screen from back stack
+                        popUpTo(WELCOME_ROUTE) { inclusive = true }
+                    }
+                },
+                onNavigateToSignup = {
+                    // Navigate to Signup, replacing the current Login screen in the stack
+                    navController.navigate(SIGNUP_ROUTE) {
+                        popUpTo(LOGIN_ROUTE) { inclusive = true }
                     }
                 }
             )
         }
 
-        // --- 2. Main Application Flow ---
+        // --- C. SIGNUP Screen ---
+        composable(SIGNUP_ROUTE) {
+            SignupScreen(
+                viewModel = loginViewModel,
+                onSignupSuccess = {
+                    // On successful signup (which often logs the user in), navigate to MainApp
+                    navController.navigate(MAIN_APP_ROUTE) {
+                        popUpTo(WELCOME_ROUTE) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    // Navigate back to Login, replacing the current Signup screen in the stack
+                    navController.navigate(LOGIN_ROUTE) {
+                        popUpTo(SIGNUP_ROUTE) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // -----------------------------------------------------------------
+        // --- D. Main Application Flow (LOGGED-IN ROUTES) ---
+        // -----------------------------------------------------------------
+
         composable(MAIN_APP_ROUTE) {
-            // Placeholder for the main screen which will house sub-navigation or main features
             MainApplicationScreen(
                 flashcardViewModel = flashcardViewModel,
                 timerModel = timerModel,
-                loginViewModel = loginViewModel, // Pass for logout functionality
+                loginViewModel = loginViewModel,
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
-                onNavigateToFlashcard = {navController.navigate(FLASHCARD_ROUTE)},
+                onNavigateToFlashcard = { navController.navigate(FLASHCARD_ROUTE) },
                 onLogout = {
-                    // Clear session and navigate back to auth screen
+                    // Clear session and navigate back to the entry point (Welcome)
                     loginViewModel.logout()
-                    navController.navigate(AUTH_ROUTE) {
-                        popUpTo(MAIN_APP_ROUTE) { inclusive = true } // Clear main app from back stack
+                    navController.navigate(WELCOME_ROUTE) {
+                        popUpTo(MAIN_APP_ROUTE) { inclusive = true }
                     }
                 }
             )
         }
 
-        // --- 3. Timer Screen ---
         composable(TIMER_ROUTE) {
-            // TimerScreen is expected to be defined in TimerScreen.kt
             TimerScreen(
                 viewModel = timerModel,
                 onBack = { navController.popBackStack() }
             )
         }
+
         composable(FLASHCARD_ROUTE) {
-            // TimerScreen is expected to be defined in TimerScreen.kt
             FlashcardScreen(
                 viewModel = flashcardViewModel,
                 onBack = { navController.popBackStack() }

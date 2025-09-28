@@ -8,30 +8,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 
+
+// Inside a new file like WelcomeScreen.kt or at the top of AuthScreen.kt
 @Composable
-fun AuthScreen(
-    // ViewModel is provided by Compose/Hilt if configured correctly.
-    // Use the `SessionManager`'s dependency injection in the parent Activity/Application.
-    viewModel: LoginViewModel = viewModel(),
-    onLoginSuccess: () -> Unit
+fun WelcomeScreen(
+    onNavigateToLogin: () -> Unit,
+    onNavigateToSignup: () -> Unit
 ) {
-    // Correctly observe the state variables directly from the ViewModel.
-    // Since the ViewModel properties are defined using 'by mutableStateOf',
-    // Compose automatically recomposes when they change.
-    val isLoading = viewModel.authState == AuthState.LOADING
-    val isInputValid = viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
-    val errorMessage = viewModel.errorMessage
-
-    // Use LaunchedEffect to handle navigation on successful authentication
-    LaunchedEffect(viewModel.authState) {
-        if (viewModel.authState == AuthState.SUCCESS) {
-            onLoginSuccess()
-            // Reset the state *after* successful navigation to clean up for future use
-            viewModel.resetState()
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -39,68 +24,28 @@ fun AuthScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Study Buddy Login", style = MaterialTheme.typography.headlineLarge)
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Email Field - Direct update to ViewModel state
-        OutlinedTextField(
-            value = viewModel.email,
-            onValueChange = { viewModel.email = it }, // State is updated here
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading
+        Text(
+            text = "Welcome to Study Buddy!",
+            style = MaterialTheme.typography.headlineLarge
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(64.dp))
 
-        // Password Field - Direct update to ViewModel state
-        OutlinedTextField(
-            value = viewModel.password,
-            onValueChange = { viewModel.password = it }, // State is updated here
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Login Button
+        // Log In Button
         Button(
-            onClick = { viewModel.login() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = isInputValid && !isLoading
+            onClick = onNavigateToLogin,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Login")
+            Text("Log In")
         }
         Spacer(modifier = Modifier.height(16.dp))
 
         // Sign Up Button
-        TextButton(
-            onClick = { viewModel.signUp() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = isInputValid && !isLoading
+        Button(
+            onClick = onNavigateToSignup,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Don't have an account? Sign Up")
-        }
-
-        // Loading Indicator
-        if (isLoading) {
-            Spacer(modifier = Modifier.height(16.dp))
-            CircularProgressIndicator()
-        }
-
-        // Error Message
-        // Check if the error message is not null or blank before displaying
-        if (!errorMessage.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            // Show a button to reset the error state
-            TextButton(onClick = { viewModel.resetState() }) {
-                Text("Dismiss")
-            }
+            Text("Sign Up")
         }
     }
 }
+

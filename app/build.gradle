@@ -65,6 +65,7 @@ dependencies {
     // --- Firebase Authentication Setup (Using BOM) ---
     implementation platform('com.google.firebase:firebase-bom:32.4.0')
     implementation 'com.google.firebase:firebase-auth-ktx'
+    implementation libs.androidx.runtime
 
     // --- Testing Dependencies ---
     testImplementation libs.junit
