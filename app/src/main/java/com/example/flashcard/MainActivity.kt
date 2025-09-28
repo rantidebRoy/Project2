@@ -177,8 +177,7 @@ fun MainApplicationScreen(
     // This is where you would place your main app UI (e.g., a tab bar, or a dashboard)
     // For now, we'll show a simple screen to confirm login success.
     // Replace FlashcardScreen with your main app dashboard later.
-    FlashcardScreen(
-        viewModel = flashcardViewModel,
+    HomePage(
         onNavigateToTimer = onNavigateToTimer,
         onNavigateToFlashcard = onNavigateToFlashcard,
         onLogout = onLogout // Pass logout to a button on this screen
@@ -191,8 +190,7 @@ fun MainApplicationScreen(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FlashcardScreen(
-    viewModel: FlashcardViewModel,
+fun HomePage(
     onNavigateToTimer: () -> Unit,
     onNavigateToFlashcard: () -> Unit,
     onLogout: () -> Unit
@@ -202,7 +200,7 @@ fun FlashcardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Study Buddy - Flashcards") },
+                title = { Text("Study Buddy") },
                 actions = {
                     Button(onClick = onLogout) {
                         Text("Logout")
@@ -231,14 +229,6 @@ fun FlashcardScreen(
                 Text("Go to Flashcard")
             }
 
-//            Spacer(modifier = Modifier.height(16.dp))
-//            // The code that was showing 'Unresolved reference 'currentCard'' is now valid
-//            // because we are relying on the actual FlashcardViewModel definition.
-//            Text(
-//                "Current Card: ${viewModel.currentCard?.question ?: "N/A"}",
-//                style = MaterialTheme.typography.bodyLarge
-//            )
-            // You can continue to build your flashcard logic UI here...
         }
     }
 }
