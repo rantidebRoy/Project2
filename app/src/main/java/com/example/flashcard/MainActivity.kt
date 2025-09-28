@@ -36,6 +36,8 @@ private const val AUTH_ROUTE = "auth_screen"
 private const val MAIN_APP_ROUTE = "main_app"
 private const val TIMER_ROUTE = "timer_screen"
 
+private const val FLASHCARD_ROUTE = "flashcard_screen"
+
 // The mock definitions for Flashcard, FlashcardViewModel, TimerModel, TimerScreen,
 // and AuthScreen have been removed to resolve the redeclaration errors.
 // These classes and functions must be defined in their own respective files.
@@ -130,6 +132,7 @@ fun FlashcardAppNavigation(sessionManager: SessionManager) {
                 timerModel = timerModel,
                 loginViewModel = loginViewModel, // Pass for logout functionality
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
+                onNavigateToFlashcard = {navController.navigate(FLASHCARD_ROUTE)},
                 onLogout = {
                     // Clear session and navigate back to auth screen
                     loginViewModel.logout()
@@ -148,6 +151,13 @@ fun FlashcardAppNavigation(sessionManager: SessionManager) {
                 onBack = { navController.popBackStack() }
             )
         }
+        composable(FLASHCARD_ROUTE) {
+            // TimerScreen is expected to be defined in TimerScreen.kt
+            FlashcardScreen(
+                viewModel = flashcardViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -160,6 +170,7 @@ fun MainApplicationScreen(
     flashcardViewModel: FlashcardViewModel,
     timerModel: TimerModel,
     loginViewModel: LoginViewModel,
+    onNavigateToFlashcard: () -> Unit,
     onNavigateToTimer: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -169,8 +180,10 @@ fun MainApplicationScreen(
     FlashcardScreen(
         viewModel = flashcardViewModel,
         onNavigateToTimer = onNavigateToTimer,
+        onNavigateToFlashcard = onNavigateToFlashcard,
         onLogout = onLogout // Pass logout to a button on this screen
     )
+
 }
 
 /**
@@ -181,8 +194,10 @@ fun MainApplicationScreen(
 fun FlashcardScreen(
     viewModel: FlashcardViewModel,
     onNavigateToTimer: () -> Unit,
+    onNavigateToFlashcard: () -> Unit,
     onLogout: () -> Unit
-) {
+)
+{
     // A simple scaffold to hold the buttons for testing navigation
     Scaffold(
         topBar = {
@@ -212,13 +227,17 @@ fun FlashcardScreen(
             Button(onClick = onNavigateToTimer) {
                 Text("Go to Timer")
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            // The code that was showing 'Unresolved reference 'currentCard'' is now valid
-            // because we are relying on the actual FlashcardViewModel definition.
-            Text(
-                "Current Card: ${viewModel.currentCard?.question ?: "N/A"}",
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Button(onClick = onNavigateToFlashcard) {
+                Text("Go to Flashcard")
+            }
+
+//            Spacer(modifier = Modifier.height(16.dp))
+//            // The code that was showing 'Unresolved reference 'currentCard'' is now valid
+//            // because we are relying on the actual FlashcardViewModel definition.
+//            Text(
+//                "Current Card: ${viewModel.currentCard?.question ?: "N/A"}",
+//                style = MaterialTheme.typography.bodyLarge
+//            )
             // You can continue to build your flashcard logic UI here...
         }
     }
