@@ -18,6 +18,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.flashcard.ui.theme.FlashcardTheme
 import kotlin.random.Random
 
 // 1. Data Class for a Flashcard
@@ -44,6 +46,11 @@ class FlashcardViewModel : ViewModel() {
     init {
         flashcards = _flashcards.value.shuffled(Random)
     }
+
+    // --- FIX: Computed property to resolve 'currentCard' reference in MainActivity.kt ---
+    val currentCard: Flashcard?
+        get() = flashcards.getOrNull(currentCardIndex)
+    // ---------------------------------------------------------------------------------
 
     // Adds a new flashcard to the list.
     fun addFlashcard(question: String, answer: String) {
@@ -115,7 +122,9 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
 // Composable for the screen where the user reviews flashcards.
 @Composable
 fun FlashcardReviewScreen(viewModel: FlashcardViewModel) {
-    val currentCard = viewModel.flashcards[viewModel.currentCardIndex]
+    // We now use the computed property 'currentCard'
+    val currentCard = viewModel.currentCard ?: return
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -150,7 +159,12 @@ fun FlashcardReviewScreen(viewModel: FlashcardViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(
-            onClick = { viewModel.nextCard() },
+            // Check if flashcards is not empty before cycling
+            onClick = {
+                if (viewModel.flashcards.isNotEmpty()) {
+                    viewModel.nextCard()
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Next Card")
@@ -180,7 +194,7 @@ fun SetFlashcardScreen(viewModel: FlashcardViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Add New Flashcard", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Add New Flashcard", fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
@@ -216,5 +230,23 @@ fun SetFlashcardScreen(viewModel: FlashcardViewModel) {
         ) {
             Text("Cancel")
         }
+    }
+}
+
+@Preview(showBackground = true, name = "Flashcard Review Screen Preview")
+@Composable
+fun FlashcardReviewScreenPreview() {
+    FlashcardTheme {
+        val viewModel = remember { FlashcardViewModel() }
+        FlashcardReviewScreen(viewModel = viewModel)
+    }
+}
+
+@Preview(showBackground = true, name = "Set Flashcard Screen Preview")
+@Composable
+fun SetFlashcardScreenPreview() {
+    FlashcardTheme {
+        val viewModel = remember { FlashcardViewModel() }
+        SetFlashcardScreen(viewModel = viewModel)
     }
 }
