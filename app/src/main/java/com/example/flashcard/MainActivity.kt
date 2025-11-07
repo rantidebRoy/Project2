@@ -1,5 +1,5 @@
 package com.example.flashcard
-
+import com.example.flashcard.SchedulerScreen
 import android.content.Context
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -181,56 +181,7 @@ fun MainScreen(
 }
 
 // --- Scheduler Screen ---
-@Composable
-fun SchedulerScreen(onBack: () -> Unit) {
-    var events by remember { mutableStateOf(listOf<String>()) }
-    var newEvent by remember { mutableStateOf("") }
-    val context = LocalContext.current
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Scheduler", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(20.dp))
-
-        // Input and add button
-        OutlinedTextField(
-            value = newEvent,
-            onValueChange = { newEvent = it },
-            label = { Text("New Event") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(12.dp))
-
-        Button(onClick = {
-            if (newEvent.isNotBlank()) {
-                events = events + newEvent
-                Toast.makeText(context, "Event added", Toast.LENGTH_SHORT).show()
-                newEvent = ""
-            }
-        }, modifier = Modifier.fillMaxWidth()) {
-            Text("Add Event")
-        }
-        Spacer(Modifier.height(20.dp))
-
-        // List of events
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(events.size) { index ->
-                Text("• ${events[index]}", modifier = Modifier.padding(4.dp))
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Back")
-        }
-    }
-}
 
 // --- Profile Screen ---
 @Composable
