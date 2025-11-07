@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ private const val MAIN_ROUTE = "main_app"
 private const val TIMER_ROUTE = "timer_screen"
 private const val FLASHCARD_ROUTE = "flashcard_screen"
 private const val PROFILE_ROUTE = "profile_screen"
+private const val SCHEDULER_ROUTE = "scheduler_screen" // New scheduler route
 
 // --- MainActivity ---
 class MainActivity : ComponentActivity() {
@@ -99,6 +101,7 @@ fun AppNavigation() {
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
                 onNavigateToFlashcard = { navController.navigate(FLASHCARD_ROUTE) },
                 onNavigateToProfile = { navController.navigate(PROFILE_ROUTE) },
+                onNavigateToScheduler = { navController.navigate(SCHEDULER_ROUTE) }, // New scheduler button
                 onLogout = {
                     FirebaseAuth.getInstance().signOut()
                     sessionManager.clearSession()
@@ -124,15 +127,21 @@ fun AppNavigation() {
         composable(PROFILE_ROUTE) {
             ProfileScreen(onBack = { navController.popBackStack() })
         }
+
+        // --- Scheduler Screen ---
+        composable(SCHEDULER_ROUTE) {
+            SchedulerScreen(onBack = { navController.popBackStack() })
+        }
     }
 }
 
-// --- MainScreen with View Profile Button ---
+// --- MainScreen with Scheduler Button ---
 @Composable
 fun MainScreen(
     onNavigateToTimer: () -> Unit,
     onNavigateToFlashcard: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToScheduler: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column(
@@ -158,10 +167,67 @@ fun MainScreen(
         Button(onClick = onNavigateToProfile, modifier = Modifier.fillMaxWidth()) {
             Text("View Profile")
         }
+        Spacer(Modifier.height(12.dp))
+
+        Button(onClick = onNavigateToScheduler, modifier = Modifier.fillMaxWidth()) {
+            Text("Scheduler") // New scheduler button
+        }
         Spacer(Modifier.height(20.dp))
 
         Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
             Text("Logout")
+        }
+    }
+}
+
+// --- Scheduler Screen ---
+@Composable
+fun SchedulerScreen(onBack: () -> Unit) {
+    var events by remember { mutableStateOf(listOf<String>()) }
+    var newEvent by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Scheduler", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(20.dp))
+
+        // Input and add button
+        OutlinedTextField(
+            value = newEvent,
+            onValueChange = { newEvent = it },
+            label = { Text("New Event") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+
+        Button(onClick = {
+            if (newEvent.isNotBlank()) {
+                events = events + newEvent
+                Toast.makeText(context, "Event added", Toast.LENGTH_SHORT).show()
+                newEvent = ""
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text("Add Event")
+        }
+        Spacer(Modifier.height(20.dp))
+
+        // List of events
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(events.size) { index ->
+                Text("• ${events[index]}", modifier = Modifier.padding(4.dp))
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            Text("Back")
         }
     }
 }
