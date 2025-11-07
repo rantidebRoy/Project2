@@ -15,23 +15,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
 // --- Routes ---
-private const val WELCOME_ROUTE = "welcome_screen"
 private const val LOGIN_ROUTE = "login_screen"
 private const val SIGNUP_ROUTE = "signup_screen"
 private const val MAIN_ROUTE = "main_app"
 private const val TIMER_ROUTE = "timer_screen"
 private const val FLASHCARD_ROUTE = "flashcard_screen"
+private const val PROFILE_ROUTE = "profile_screen"
 
 // --- MainActivity ---
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -66,78 +63,76 @@ fun AppNavigation() {
     val flashcardViewModel: FlashcardViewModel = viewModel()
     val timerModel: TimerModel = viewModel()
 
-    val startDestination = if (sessionManager.isLoggedIn()) MAIN_ROUTE else WELCOME_ROUTE
+    NavHost(navController = navController, startDestination = LOGIN_ROUTE) {
 
-    NavHost(navController = navController, startDestination = startDestination) {
-
-        // Welcome Screen
-        composable(WELCOME_ROUTE) {
-            WelcomeScreenNew(
-                onNavigateToLogin = { navController.navigate(LOGIN_ROUTE) },
-                onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) }
-            )
-        }
-
-        // Login Screen
+        // --- Login Screen ---
         composable(LOGIN_ROUTE) {
             LoginScreen(
                 viewModel = loginViewModel,
                 onLoginSuccess = {
+                    sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
                     navController.navigate(MAIN_ROUTE) {
-                        popUpTo(WELCOME_ROUTE) { inclusive = true }
+                        popUpTo(LOGIN_ROUTE) { inclusive = true }
                     }
                 },
                 onNavigateToSignup = {
-                    navController.navigate(SIGNUP_ROUTE) {
-                        popUpTo(LOGIN_ROUTE) { inclusive = true }
-                    }
+                    navController.navigate(SIGNUP_ROUTE)
                 }
             )
         }
 
-        // Signup Screen
+        // --- Signup Screen ---
         composable(SIGNUP_ROUTE) {
             SignupScreenIntegrated { name, email, password ->
                 registerUser(context, name, email, password) {
+                    sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
                     navController.navigate(MAIN_ROUTE) {
-                        popUpTo(WELCOME_ROUTE) { inclusive = true }
+                        popUpTo(SIGNUP_ROUTE) { inclusive = true }
                     }
                 }
             }
         }
 
-        // Main App Screen
+        // --- Main Screen ---
         composable(MAIN_ROUTE) {
             MainScreen(
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
                 onNavigateToFlashcard = { navController.navigate(FLASHCARD_ROUTE) },
+                onNavigateToProfile = { navController.navigate(PROFILE_ROUTE) },
                 onLogout = {
                     FirebaseAuth.getInstance().signOut()
+                    sessionManager.clearSession()
                     Toast.makeText(context, "Logged out", Toast.LENGTH_SHORT).show()
-                    navController.navigate(WELCOME_ROUTE) {
+                    navController.navigate(LOGIN_ROUTE) {
                         popUpTo(MAIN_ROUTE) { inclusive = true }
                     }
                 }
             )
         }
 
-        // Timer Screen
+        // --- Timer Screen ---
         composable(TIMER_ROUTE) {
             TimerScreen(viewModel = timerModel, onBack = { navController.popBackStack() })
         }
 
-        // Flashcard Screen
+        // --- Flashcard Screen ---
         composable(FLASHCARD_ROUTE) {
             FlashcardScreen(viewModel = flashcardViewModel, onBack = { navController.popBackStack() })
+        }
+
+        // --- Profile Screen ---
+        composable(PROFILE_ROUTE) {
+            ProfileScreen(onBack = { navController.popBackStack() })
         }
     }
 }
 
-// --- Main App Screen ---
+// --- MainScreen with View Profile Button ---
 @Composable
 fun MainScreen(
     onNavigateToTimer: () -> Unit,
     onNavigateToFlashcard: () -> Unit,
+    onNavigateToProfile: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column(
@@ -147,25 +142,52 @@ fun MainScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("You are logged in!", style = MaterialTheme.typography.headlineMedium)
+        Text("Main Menu", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(20.dp))
+
         Button(onClick = onNavigateToTimer, modifier = Modifier.fillMaxWidth()) {
             Text("Go to Timer")
         }
         Spacer(Modifier.height(12.dp))
+
         Button(onClick = onNavigateToFlashcard, modifier = Modifier.fillMaxWidth()) {
             Text("Go to Flashcards")
         }
+        Spacer(Modifier.height(12.dp))
+
+        Button(onClick = onNavigateToProfile, modifier = Modifier.fillMaxWidth()) {
+            Text("View Profile")
+        }
         Spacer(Modifier.height(20.dp))
+
         Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
             Text("Logout")
         }
     }
 }
 
-// --- Welcome Screen (renamed) ---
+// --- Profile Screen ---
 @Composable
-fun WelcomeScreenNew(onNavigateToLogin: () -> Unit, onNavigateToSignup: () -> Unit) {
+fun ProfileScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val userId = FirebaseAuth.getInstance().currentUser?.uid
+    var username by remember { mutableStateOf<String?>(null) }
+    var email by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(userId) {
+        if (userId != null) {
+            val db = FirebaseFirestore.getInstance()
+            db.collection("users").document(userId).get()
+                .addOnSuccessListener { snapshot ->
+                    username = snapshot.getString("name")
+                    email = snapshot.getString("email")
+                }
+                .addOnFailureListener {
+                    Toast.makeText(context, "Failed to fetch user data", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -173,14 +195,15 @@ fun WelcomeScreenNew(onNavigateToLogin: () -> Unit, onNavigateToSignup: () -> Un
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Welcome to Study Buddy!", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onNavigateToLogin, modifier = Modifier.fillMaxWidth()) {
-            Text("Login")
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onNavigateToSignup, modifier = Modifier.fillMaxWidth()) {
-            Text("Sign Up")
+        Text("User Profile", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(20.dp))
+
+        Text("Name: ${username ?: "Loading..."}")
+        Text("Email: ${email ?: "Loading..."}")
+        Spacer(Modifier.height(20.dp))
+
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            Text("Back")
         }
     }
 }
@@ -241,12 +264,10 @@ fun SignupScreenIntegrated(onSignup: (String, String, String) -> Unit) {
 fun registerUser(context: Context, name: String, email: String, password: String, onSuccess: () -> Unit) {
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
-    val TAG = "SignupDebug"
 
     auth.createUserWithEmailAndPassword(email, password)
         .addOnSuccessListener { result ->
-            val firebaseUser = result.user
-            if (firebaseUser == null) {
+            val firebaseUser = result.user ?: run {
                 Toast.makeText(context, "Firebase user is null", Toast.LENGTH_LONG).show()
                 return@addOnSuccessListener
             }
@@ -262,8 +283,8 @@ fun registerUser(context: Context, name: String, email: String, password: String
                 transaction.set(counterRef, mapOf("userCount" to newId))
                 transaction.set(userRef, mapOf("id" to newId, "name" to name, "email" to email))
                 newId
-            }.addOnSuccessListener { newId ->
-                Toast.makeText(context, "Signup success! ID = $newId", Toast.LENGTH_LONG).show()
+            }.addOnSuccessListener {
+                Toast.makeText(context, "Signup success!", Toast.LENGTH_LONG).show()
                 onSuccess()
             }.addOnFailureListener { e ->
                 Toast.makeText(context, "Transaction failed: ${e.message}", Toast.LENGTH_LONG).show()
