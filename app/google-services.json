@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "904764193075",
-    "project_id": "studybuddy235759",
-    "storage_bucket": "studybuddy235759.firebasestorage.app"
+    "project_number": "737761139551",
+    "project_id": "studybuddy-48bc3",
+    "storage_bucket": "studybuddy-48bc3.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:904764193075:android:a6799b24074aee2c88e646",
+        "mobilesdk_app_id": "1:737761139551:android:a871598a8fbe152f61b4ea",
         "android_client_info": {
           "package_name": "com.example.flashcard"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBFq_4hNFz-VsYA16AsFxf7aVeRBS_Dyzw"
+          "current_key": "AIzaSyD3XFMSiWR1KJ8guROv55cGIeSk6Ap1y_s"
         }
       ],
       "services": {

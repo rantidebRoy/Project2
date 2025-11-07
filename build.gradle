@@ -5,7 +5,7 @@ buildscript {
     }
     dependencies {
         // Add the Google Services plugin
-        classpath 'com.google.gms:google-services:4.4.0'
+        classpath 'com.google.gms:google-services:4.4.2'
     }
 }
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
@@ -16,4 +16,5 @@ alias(libs.plugins.android.application) apply false
 }
 
 // In your project-level build.gradle file
+
 
