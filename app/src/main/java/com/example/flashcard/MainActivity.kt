@@ -1,11 +1,14 @@
 package com.example.flashcard
-import com.example.flashcard.SchedulerScreen
+
 import android.content.Context
+import android.os.Bundle
 import android.widget.Toast
+import android.app.NotificationManager
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,11 +30,11 @@ private const val MAIN_ROUTE = "main_app"
 private const val TIMER_ROUTE = "timer_screen"
 private const val FLASHCARD_ROUTE = "flashcard_screen"
 private const val PROFILE_ROUTE = "profile_screen"
-private const val SCHEDULER_ROUTE = "scheduler_screen" // New scheduler route
+private const val SCHEDULER_ROUTE = "scheduler_screen"
 
 // --- MainActivity ---
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
@@ -65,6 +68,7 @@ fun AppNavigation() {
     val flashcardViewModel: FlashcardViewModel = viewModel()
     val timerModel: TimerModel = viewModel()
     val startDestination = if (sessionManager.isLoggedIn()) MAIN_ROUTE else LOGIN_ROUTE
+
     NavHost(navController = navController, startDestination = startDestination) {
 
         // --- Login Screen ---
@@ -101,7 +105,7 @@ fun AppNavigation() {
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
                 onNavigateToFlashcard = { navController.navigate(FLASHCARD_ROUTE) },
                 onNavigateToProfile = { navController.navigate(PROFILE_ROUTE) },
-                onNavigateToScheduler = { navController.navigate(SCHEDULER_ROUTE) }, // New scheduler button
+                onNavigateToScheduler = { navController.navigate(SCHEDULER_ROUTE) },
                 onLogout = {
                     FirebaseAuth.getInstance().signOut()
                     sessionManager.clearSession()
@@ -115,7 +119,11 @@ fun AppNavigation() {
 
         // --- Timer Screen ---
         composable(TIMER_ROUTE) {
-            TimerScreen(viewModel = timerModel, onBack = { navController.popBackStack() })
+            TimerScreen(
+                viewModel = timerModel,
+                onBack = { navController.popBackStack() },
+                context = context
+            )
         }
 
         // --- Flashcard Screen ---
@@ -135,7 +143,7 @@ fun AppNavigation() {
     }
 }
 
-// --- MainScreen with Scheduler Button ---
+// --- MainScreen with DND Permission Prompt ---
 @Composable
 fun MainScreen(
     onNavigateToTimer: () -> Unit,
@@ -144,6 +152,42 @@ fun MainScreen(
     onNavigateToScheduler: () -> Unit,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    // DND Permission Check
+    val notificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    var showDndDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!notificationManager.isNotificationPolicyAccessGranted) {
+            showDndDialog = true
+        }
+    }
+
+    // Show AlertDialog to request DND permission
+    if (showDndDialog) {
+        AlertDialog(
+            onDismissRequest = { showDndDialog = false },
+            title = { Text("Permission Required") },
+            text = { Text("To enable Focus timer, please allow access to Do Not Disturb mode.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDndDialog = false
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                    context.startActivity(intent)
+                }) {
+                    Text("Grant Access")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDndDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -162,25 +206,19 @@ fun MainScreen(
             Text("Timer")
         }
         Spacer(Modifier.height(12.dp))
-
         Button(onClick = onNavigateToFlashcard, modifier = Modifier.fillMaxWidth()) {
             Text("Flashcards")
         }
         Spacer(Modifier.height(12.dp))
-
         Button(onClick = onNavigateToScheduler, modifier = Modifier.fillMaxWidth()) {
-            Text("Scheduler") // New scheduler button
+            Text("Scheduler")
         }
         Spacer(Modifier.height(20.dp))
-
         Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
             Text("Logout")
         }
     }
 }
-
-// --- Scheduler Screen ---
-
 
 // --- Profile Screen ---
 @Composable
@@ -213,11 +251,9 @@ fun ProfileScreen(onBack: () -> Unit) {
     ) {
         Text("User Profile", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(20.dp))
-
         Text("Name: ${username ?: "Loading..."}")
         Text("Email: ${email ?: "Loading..."}")
         Spacer(Modifier.height(20.dp))
-
         Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
             Text("Back")
         }
@@ -277,7 +313,13 @@ fun SignupScreenIntegrated(onSignup: (String, String, String) -> Unit) {
 }
 
 // --- Firebase Signup Function ---
-fun registerUser(context: Context, name: String, email: String, password: String, onSuccess: () -> Unit) {
+fun registerUser(
+    context: Context,
+    name: String,
+    email: String,
+    password: String,
+    onSuccess: () -> Unit
+) {
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
 
