@@ -1,6 +1,9 @@
 package com.example.flashcard
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -9,121 +12,203 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.flashcard.ui.theme.FlashcardTheme
-import kotlin.random.Random
+import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
-// 1. Data Class for a Flashcard
-// This data class will represent a single flashcard.
-data class Flashcard(val question: String, val answer: String)
+// --- Data Models ---
+data class Topic(
+    val id: String = "",
+    val name: String = ""
+)
 
-// 2. Class to manage flashcard data and review sessions.
-// This is the core logic, adapted for use with Compose.
+data class Flashcard(
+    val id: String = "",
+    val question: String = "",
+    val answer: String = ""
+)
+
+// --- ViewModel ---
 class FlashcardViewModel : ViewModel() {
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
-    // A list to store our flashcards.
-    private val _flashcards = mutableStateOf(getSampleFlashcards().toMutableList())
-    var flashcards: List<Flashcard> by mutableStateOf(emptyList())
+    var topics by mutableStateOf<List<Topic>>(emptyList())
+        private set
 
-    // State to hold our current list of cards and the current card index.
-    var currentCardIndex by mutableStateOf(0)
+    var flashcards by mutableStateOf<List<Flashcard>>(emptyList())
+        private set
 
-    // State to toggle the visibility of the answer.
-    var isAnswerVisible by mutableStateOf(false)
+    var currentTopic by mutableStateOf<Topic?>(null)
+        private set
 
-    // State to track if we are adding a new card
-    var isAddingNewCard by mutableStateOf(false)
-
-    init {
-        flashcards = _flashcards.value.shuffled(Random)
+    fun loadTopics() {
+        val uid = auth.currentUser?.uid ?: return
+        db.collection("users").document(uid).collection("topics")
+            .get()
+            .addOnSuccessListener { result ->
+                topics = result.documents.map { doc ->
+                    Topic(doc.id, doc.getString("name") ?: "")
+                }
+            }
     }
 
-    // --- FIX: Computed property to resolve 'currentCard' reference in MainActivity.kt ---
-    val currentCard: Flashcard?
-        get() = flashcards.getOrNull(currentCardIndex)
-    // ---------------------------------------------------------------------------------
-
-    // Adds a new flashcard to the list.
-    fun addFlashcard(question: String, answer: String) {
-        val newFlashcard = Flashcard(question, answer)
-        _flashcards.value.add(newFlashcard)
-        flashcards = _flashcards.value.shuffled(Random)
-        currentCardIndex = 0 // Restart session with the new card
+    fun addTopic(name: String, onDone: () -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        val topic = hashMapOf("name" to name)
+        db.collection("users").document(uid).collection("topics")
+            .add(topic)
+            .addOnSuccessListener {
+                loadTopics()
+                onDone()
+            }
     }
 
-    // Returns a shuffled list of all flashcards for a review session.
-    fun getShuffledFlashcards(): List<Flashcard> {
-        return flashcards.shuffled(Random)
+    fun loadFlashcards(topic: Topic) {
+        val uid = auth.currentUser?.uid ?: return
+        currentTopic = topic
+        db.collection("users").document(uid)
+            .collection("topics").document(topic.id)
+            .collection("flashcards")
+            .get()
+            .addOnSuccessListener { result ->
+                flashcards = result.documents.map { doc ->
+                    Flashcard(
+                        id = doc.id,
+                        question = doc.getString("question") ?: "",
+                        answer = doc.getString("answer") ?: ""
+                    )
+                }
+            }
     }
 
-    fun toggleAnswerVisibility() {
-        isAnswerVisible = !isAnswerVisible
-    }
-
-    fun nextCard() {
-        isAnswerVisible = false // Hide answer for the new card
-        currentCardIndex = (currentCardIndex + 1) % flashcards.size // Cycle through cards
-    }
-
-    // Toggles the view between flashcard review and adding a new card.
-    fun toggleAddCardView() {
-        isAddingNewCard = !isAddingNewCard
-    }
-
-    private fun getSampleFlashcards(): List<Flashcard> {
-        return listOf(
-            Flashcard("What is the capital of France?", "Paris"),
-            Flashcard("What is the main function of the heart?", "To pump blood throughout the body."),
-            Flashcard("What does 'val' mean in Kotlin?", "It declares a read-only (immutable) variable."),
-            Flashcard("What is the largest planet in our solar system?", "Jupiter")
-        )
+    fun addFlashcard(question: String, answer: String, onDone: () -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        val topic = currentTopic ?: return
+        val flashcard = hashMapOf("question" to question, "answer" to answer)
+        db.collection("users").document(uid)
+            .collection("topics").document(topic.id)
+            .collection("flashcards")
+            .add(flashcard)
+            .addOnSuccessListener {
+                loadFlashcards(topic)
+                onDone()
+            }
     }
 }
 
-// 4. Composable function to display the flashcard UI.
+// --- Screens ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
+    var currentView by remember { mutableStateOf("topics") }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Flashcards") },
+                title = { Text(if (currentView == "topics") "Topics" else viewModel.currentTopic?.name ?: "") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (currentView != "topics") {
+                        IconButton(onClick = { currentView = "topics" }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    } else {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 }
             )
         }
-    ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            if (viewModel.isAddingNewCard) {
-                SetFlashcardScreen(viewModel)
-            } else {
-                if (viewModel.flashcards.isEmpty()) {
-                    Text("No flashcards to review. Please add some.")
-                } else {
-                    FlashcardReviewScreen(viewModel)
-                }
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (currentView) {
+                "topics" -> TopicListScreen(
+                    viewModel = viewModel,
+                    onTopicSelected = {
+                        viewModel.loadFlashcards(it)
+                        currentView = "flashcards"
+                    },
+                    onAddTopic = {
+                        currentView = "addTopic"
+                    }
+                )
+
+                "addTopic" -> AddTopicScreen(
+                    onAdd = { name ->
+                        viewModel.addTopic(name) {
+                            currentView = "topics"
+                        }
+                    },
+                    onCancel = { currentView = "topics" }
+                )
+
+                "flashcards" -> FlashcardListScreen(
+                    viewModel = viewModel,
+                    onAddFlashcard = { currentView = "addFlashcard" }
+                )
+
+                "addFlashcard" -> AddFlashcardScreen(
+                    viewModel = viewModel,
+                    onDone = { currentView = "flashcards" },
+                    onCancel = { currentView = "flashcards" }
+                )
             }
         }
     }
 }
 
-// Composable for the screen where the user reviews flashcards.
+// --- Topic List Screen ---
 @Composable
-fun FlashcardReviewScreen(viewModel: FlashcardViewModel) {
-    // We now use the computed property 'currentCard'
-    val currentCard = viewModel.currentCard ?: return
+fun TopicListScreen(
+    viewModel: FlashcardViewModel,
+    onTopicSelected: (Topic) -> Unit,
+    onAddTopic: () -> Unit
+) {
+    LaunchedEffect(Unit) {
+        viewModel.loadTopics()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Your Topics", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
+
+        if (viewModel.topics.isEmpty()) {
+            Text("No topics yet.")
+            Spacer(Modifier.height(8.dp))
+        }
+
+        for (topic in viewModel.topics) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { onTopicSelected(topic) },
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                Box(Modifier.padding(16.dp)) {
+                    Text(topic.name, fontSize = 20.sp)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onAddTopic, modifier = Modifier.fillMaxWidth()) {
+            Text("Add New Topic")
+        }
+    }
+}
+
+// --- Add Topic Screen ---
+@Composable
+fun AddTopicScreen(onAdd: (String) -> Unit, onCancel: () -> Unit) {
+    var name by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -132,58 +217,66 @@ fun FlashcardReviewScreen(viewModel: FlashcardViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = currentCard.question,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
+        Text("Add New Topic", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Topic Name") },
+            modifier = Modifier.fillMaxWidth()
         )
-
-        if (viewModel.isAnswerVisible) {
-            Text(
-                text = currentCard.answer,
-                fontSize = 20.sp,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-        } else {
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = { onAdd(name) }, enabled = name.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+            Text("Save Topic")
         }
-
-        Button(
-            onClick = { viewModel.toggleAnswerVisibility() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (viewModel.isAnswerVisible) "Hide Answer" else "Show Answer")
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            // Check if flashcards is not empty before cycling
-            onClick = {
-                if (viewModel.flashcards.isNotEmpty()) {
-                    viewModel.nextCard()
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Next Card")
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = { viewModel.toggleAddCardView() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Add New Card")
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            Text("Cancel")
         }
     }
 }
 
-// Composable for the screen where the user adds a new flashcard.
+// --- Flashcard List for a Topic ---
 @Composable
-fun SetFlashcardScreen(viewModel: FlashcardViewModel) {
+fun FlashcardListScreen(viewModel: FlashcardViewModel, onAddFlashcard: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Flashcards in ${viewModel.currentTopic?.name}", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
+
+        if (viewModel.flashcards.isEmpty()) {
+            Text("No flashcards yet.")
+        } else {
+            for (card in viewModel.flashcards) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text("A: ${card.answer}")
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onAddFlashcard, modifier = Modifier.fillMaxWidth()) {
+            Text("Add New Flashcard")
+        }
+    }
+}
+
+// --- Add Flashcard Screen ---
+@Composable
+fun AddFlashcardScreen(viewModel: FlashcardViewModel, onDone: () -> Unit, onCancel: () -> Unit) {
     var question by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("") }
 
@@ -194,8 +287,8 @@ fun SetFlashcardScreen(viewModel: FlashcardViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Add New Flashcard", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(16.dp))
+        Text("Add Flashcard", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
             value = question,
@@ -203,50 +296,28 @@ fun SetFlashcardScreen(viewModel: FlashcardViewModel) {
             label = { Text("Question") },
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = answer,
             onValueChange = { answer = it },
             label = { Text("Answer") },
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
+
         Button(
             onClick = {
-                viewModel.addFlashcard(question, answer)
-                question = ""
-                answer = ""
-                viewModel.toggleAddCardView()
+                viewModel.addFlashcard(question, answer) { onDone() }
             },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = question.isNotBlank() && answer.isNotBlank()
-        ) {
-            Text("Save Card")
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = { viewModel.toggleAddCardView() },
+            enabled = question.isNotBlank() && answer.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
         ) {
+            Text("Save Flashcard")
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
             Text("Cancel")
         }
-    }
-}
-
-@Preview(showBackground = true, name = "Flashcard Review Screen Preview")
-@Composable
-fun FlashcardReviewScreenPreview() {
-    FlashcardTheme {
-        val viewModel = remember { FlashcardViewModel() }
-        FlashcardReviewScreen(viewModel = viewModel)
-    }
-}
-
-@Preview(showBackground = true, name = "Set Flashcard Screen Preview")
-@Composable
-fun SetFlashcardScreenPreview() {
-    FlashcardTheme {
-        val viewModel = remember { FlashcardViewModel() }
-        SetFlashcardScreen(viewModel = viewModel)
     }
 }

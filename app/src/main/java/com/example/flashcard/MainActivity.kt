@@ -154,18 +154,17 @@ fun MainScreen(
         Text("Main Menu", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(20.dp))
 
+        Button(onClick = onNavigateToProfile, modifier = Modifier.fillMaxWidth()) {
+            Text("View Profile")
+        }
+        Spacer(Modifier.height(12.dp))
         Button(onClick = onNavigateToTimer, modifier = Modifier.fillMaxWidth()) {
-            Text("Go to Timer")
+            Text("Timer")
         }
         Spacer(Modifier.height(12.dp))
 
         Button(onClick = onNavigateToFlashcard, modifier = Modifier.fillMaxWidth()) {
-            Text("Go to Flashcards")
-        }
-        Spacer(Modifier.height(12.dp))
-
-        Button(onClick = onNavigateToProfile, modifier = Modifier.fillMaxWidth()) {
-            Text("View Profile")
+            Text("Flashcards")
         }
         Spacer(Modifier.height(12.dp))
 
