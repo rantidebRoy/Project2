@@ -4,6 +4,11 @@ import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchedulerScreen(onBack: () -> Unit) {
     var currentView by remember { mutableStateOf("main") } // "main", "add", "today", "tomorrow", "details"
@@ -32,7 +38,15 @@ fun SchedulerScreen(onBack: () -> Unit) {
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Scheduler", style = MaterialTheme.typography.headlineMedium)
+                TopAppBar(
+                    title = { Text("Scheduler") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+
                 Spacer(Modifier.height(20.dp))
 
                 Button(onClick = {
@@ -53,11 +67,6 @@ fun SchedulerScreen(onBack: () -> Unit) {
 
                 Button(onClick = { currentView = "add" }, modifier = Modifier.fillMaxWidth()) {
                     Text("Add Event")
-                }
-                Spacer(Modifier.height(20.dp))
-
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                    Text("Back")
                 }
             }
         }
@@ -121,8 +130,17 @@ fun SchedulerScreen(onBack: () -> Unit) {
                     .fillMaxSize()
                     .padding(24.dp)
             ) {
-                Text(if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule",
-                    style = MaterialTheme.typography.headlineMedium)
+                TopAppBar(
+                    title = {
+                        Text(if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule")
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { currentView = "main" }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+
                 Spacer(Modifier.height(16.dp))
 
                 if (events.isEmpty()) {
@@ -147,11 +165,6 @@ fun SchedulerScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-
-                Spacer(Modifier.height(20.dp))
-                Button(onClick = { currentView = "main" }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Back")
-                }
             }
         }
 
@@ -166,52 +179,61 @@ fun SchedulerScreen(onBack: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Event Details", style = MaterialTheme.typography.headlineMedium)
-                    Spacer(Modifier.height(16.dp))
-                    Text("Title: ${event["title"]}")
-                    Spacer(Modifier.height(8.dp))
-                    Text("Description: ${event["description"]}")
-                    Spacer(Modifier.height(8.dp))
-                    Text("Time: $timeStr")
-                    Spacer(Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            if (userId.isNotEmpty() && docId != null) {
-                                db.collection("users")
-                                    .document(userId)
-                                    .collection("events")
-                                    .document(docId)
-                                    .delete()
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "Event deleted", Toast.LENGTH_SHORT).show()
-                                        currentView = if (dateFilter == "today") "today" else "tomorrow"
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Delete failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
+                    TopAppBar(
+                        title = { Text("Event Details") },
+                        navigationIcon = {
+                            IconButton(onClick = {
+                                currentView = if (dateFilter == "today") "today" else "tomorrow"
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Delete Event")
-                    }
+                        actions = {
+                            if (userId.isNotEmpty() && docId != null) {
+                                IconButton(onClick = {
+                                    db.collection("users")
+                                        .document(userId)
+                                        .collection("events")
+                                        .document(docId)
+                                        .delete()
+                                        .addOnSuccessListener {
+                                            Toast.makeText(context, "Event deleted", Toast.LENGTH_SHORT).show()
+                                            currentView = if (dateFilter == "today") "today" else "tomorrow"
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(context, "Delete failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete Event")
+                                }
+                            }
+                        }
+                    )
 
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { currentView = if (dateFilter == "today") "today" else "tomorrow" },
-                        modifier = Modifier.fillMaxWidth()) {
-                        Text("Back")
+                    // Scrollable content
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Spacer(Modifier.height(16.dp))
+                        Text("Title: ${event["title"]}", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Description: ${event["description"]}", style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Time: $timeStr", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         }
+
     }
 }
 
-// --- Composable for Adding Event ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEventScreen(
     onBack: () -> Unit,
@@ -228,7 +250,15 @@ fun AddEventScreen(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Add Event", style = MaterialTheme.typography.headlineMedium)
+        TopAppBar(
+            title = { Text("Add Event") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+
         Spacer(Modifier.height(20.dp))
 
         OutlinedTextField(
@@ -295,8 +325,5 @@ fun AddEventScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Save Event") }
-
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
 }

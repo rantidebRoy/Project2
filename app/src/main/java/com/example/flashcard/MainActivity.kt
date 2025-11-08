@@ -9,6 +9,10 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -221,12 +225,14 @@ fun MainScreen(
 }
 
 // --- Profile Screen ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val userId = FirebaseAuth.getInstance().currentUser?.uid
     var username by remember { mutableStateOf<String?>(null) }
     var email by remember { mutableStateOf<String?>(null) }
+    var id by remember { mutableStateOf<Number?>(null) }
 
     LaunchedEffect(userId) {
         if (userId != null) {
@@ -235,6 +241,8 @@ fun ProfileScreen(onBack: () -> Unit) {
                 .addOnSuccessListener { snapshot ->
                     username = snapshot.getString("name")
                     email = snapshot.getString("email")
+                    id = snapshot.getLong("id")
+
                 }
                 .addOnFailureListener {
                     Toast.makeText(context, "Failed to fetch user data", Toast.LENGTH_SHORT).show()
@@ -245,20 +253,34 @@ fun ProfileScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
     ) {
-        Text("User Profile", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(20.dp))
-        Text("Name: ${username ?: "Loading..."}")
-        Text("Email: ${email ?: "Loading..."}")
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Back")
+        TopAppBar(
+            title = { Text("User Profile") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(20.dp))
+            Text("Name: ${username ?: "Loading..."}", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(8.dp))
+            Text("Email: ${email ?: "Loading..."}", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(8.dp))
+            Text("ID: ${id ?: "Loading..."}", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
+
 
 // --- Signup Screen Integrated ---
 @Composable

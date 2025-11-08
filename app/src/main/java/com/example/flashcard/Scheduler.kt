@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,6 +48,7 @@ class SchedulerAlarmReceiver : BroadcastReceiver() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchedulerScreen(viewModel: SchedulerViewModel = viewModel(), onBack: () -> Unit) {
     var title by remember { mutableStateOf("") }
@@ -59,7 +62,16 @@ fun SchedulerScreen(viewModel: SchedulerViewModel = viewModel(), onBack: () -> U
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Scheduler", style = MaterialTheme.typography.headlineMedium)
+        // Top bar with back button
+        TopAppBar(
+            title = { Text("Scheduler") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+
         Spacer(Modifier.height(20.dp))
 
         OutlinedTextField(
@@ -122,12 +134,6 @@ fun SchedulerScreen(viewModel: SchedulerViewModel = viewModel(), onBack: () -> U
                     }
                 }
             }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Back")
         }
     }
 }
