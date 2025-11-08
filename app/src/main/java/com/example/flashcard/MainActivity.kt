@@ -64,8 +64,8 @@ fun AppNavigation() {
         viewModel(factory = LoginViewModelFactory(sessionManager))
     val flashcardViewModel: FlashcardViewModel = viewModel()
     val timerModel: TimerModel = viewModel()
-
-    NavHost(navController = navController, startDestination = LOGIN_ROUTE) {
+    val startDestination = if (sessionManager.isLoggedIn()) MAIN_ROUTE else LOGIN_ROUTE
+    NavHost(navController = navController, startDestination = startDestination) {
 
         // --- Login Screen ---
         composable(LOGIN_ROUTE) {
