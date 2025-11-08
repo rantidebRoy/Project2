@@ -35,6 +35,9 @@ private const val TIMER_ROUTE = "timer_screen"
 private const val FLASHCARD_ROUTE = "flashcard_screen"
 private const val PROFILE_ROUTE = "profile_screen"
 private const val SCHEDULER_ROUTE = "scheduler_screen"
+private const val QNA_ROUTE = "qna_screen" // Add with other routes
+public const val PUBLISH_QUESTION_ROUTE = "publish_question_screen"
+
 
 // --- MainActivity ---
 class MainActivity : ComponentActivity() {
@@ -110,6 +113,7 @@ fun AppNavigation() {
                 onNavigateToFlashcard = { navController.navigate(FLASHCARD_ROUTE) },
                 onNavigateToProfile = { navController.navigate(PROFILE_ROUTE) },
                 onNavigateToScheduler = { navController.navigate(SCHEDULER_ROUTE) },
+                onNavigateToQnA = { navController.navigate(QNA_ROUTE) },
                 onLogout = {
                     FirebaseAuth.getInstance().signOut()
                     sessionManager.clearSession()
@@ -144,6 +148,14 @@ fun AppNavigation() {
         composable(SCHEDULER_ROUTE) {
             SchedulerScreen(onBack = { navController.popBackStack() })
         }
+        composable(QNA_ROUTE) {
+            QnAScreen(navController = navController)
+        }
+
+        composable(PUBLISH_QUESTION_ROUTE) {
+            PublishQuestionScreen(onBack = { navController.popBackStack() })
+        }
+
     }
 }
 
@@ -154,6 +166,7 @@ fun MainScreen(
     onNavigateToFlashcard: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToScheduler: () -> Unit,
+    onNavigateToQnA: () -> Unit,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -217,6 +230,11 @@ fun MainScreen(
         Button(onClick = onNavigateToScheduler, modifier = Modifier.fillMaxWidth()) {
             Text("Scheduler")
         }
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onNavigateToQnA, modifier = Modifier.fillMaxWidth()) {
+            Text("QnA")
+        }
+
         Spacer(Modifier.height(20.dp))
         Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
             Text("Logout")
