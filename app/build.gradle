@@ -80,6 +80,9 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.6.2"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation libs.androidx.runtime.saveable
+    implementation "androidx.work:work-runtime-ktx:2.9.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0"
+
 
     // --- Testing ---
     testImplementation libs.junit

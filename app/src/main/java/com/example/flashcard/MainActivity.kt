@@ -1,11 +1,13 @@
 package com.example.flashcard
 
-import android.content.Context
-import android.os.Bundle
-import android.widget.Toast
+import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -22,10 +24,19 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
+
+
 
 // --- Routes ---
 private const val LOGIN_ROUTE = "login_screen"
@@ -43,10 +54,26 @@ public const val PUBLISH_QUESTION_ROUTE = "publish_question_screen"
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Create Notification Channel for API 26+
+        createNotificationChannel()
+
         setContent {
             MaterialTheme {
-                AppNavigation()
+                AppNavigationWithNotifications()
             }
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "scheduler_channel",
+                "Scheduler Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
         }
     }
 }
@@ -65,7 +92,7 @@ class LoginViewModelFactory(private val sessionManager: SessionManager) :
 
 // --- Navigation ---
 @Composable
-fun AppNavigation() {
+fun AppNavigationWithNotifications() {
     val navController = rememberNavController()
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
@@ -76,6 +103,12 @@ fun AppNavigation() {
     val timerModel: TimerModel = viewModel()
     val startDestination = if (sessionManager.isLoggedIn()) MAIN_ROUTE else LOGIN_ROUTE
 
+    // Launch notification checker in background
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    LaunchedEffect(Unit) {
+        startNotificationChecker(context)
+    }
+
     NavHost(navController = navController, startDestination = startDestination) {
 
         // --- Login Screen ---
@@ -84,13 +117,9 @@ fun AppNavigation() {
                 viewModel = loginViewModel,
                 onLoginSuccess = {
                     sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
-                    navController.navigate(MAIN_ROUTE) {
-                        popUpTo(LOGIN_ROUTE) { inclusive = true }
-                    }
+                    navController.navigate(MAIN_ROUTE) { popUpTo(LOGIN_ROUTE) { inclusive = true } }
                 },
-                onNavigateToSignup = {
-                    navController.navigate(SIGNUP_ROUTE)
-                }
+                onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) }
             )
         }
 
@@ -99,9 +128,7 @@ fun AppNavigation() {
             SignupScreenIntegrated { name, email, password ->
                 registerUser(context, name, email, password) {
                     sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
-                    navController.navigate(MAIN_ROUTE) {
-                        popUpTo(SIGNUP_ROUTE) { inclusive = true }
-                    }
+                    navController.navigate(MAIN_ROUTE) { popUpTo(SIGNUP_ROUTE) { inclusive = true } }
                 }
             }
         }
@@ -118,67 +145,33 @@ fun AppNavigation() {
                     FirebaseAuth.getInstance().signOut()
                     sessionManager.clearSession()
                     Toast.makeText(context, "Logged out", Toast.LENGTH_SHORT).show()
-                    navController.navigate(LOGIN_ROUTE) {
-                        popUpTo(MAIN_ROUTE) { inclusive = true }
-                    }
+                    navController.navigate(LOGIN_ROUTE) { popUpTo(MAIN_ROUTE) { inclusive = true } }
                 }
             )
         }
 
         // --- Timer Screen ---
         composable(TIMER_ROUTE) {
-            TimerScreen(
-                viewModel = timerModel,
-                onBack = { navController.popBackStack() },
-                context = context
-            )
+            TimerScreen(viewModel = timerModel, onBack = { navController.popBackStack() }, context = context)
         }
 
         // --- Flashcard Screen ---
-        composable(FLASHCARD_ROUTE) {
-            FlashcardScreen(viewModel = flashcardViewModel, onBack = { navController.popBackStack() })
-        }
-        // --- Flashcard Topic Flow ---
-        composable("topicDetail/{topic}") { backStackEntry ->
-            val topic = backStackEntry.arguments?.getString("topic") ?: ""
-            TopicDetailScreen(navController, topic)
-        }
-
-        composable("listView/{topic}") { backStackEntry ->
-            val topic = backStackEntry.arguments?.getString("topic") ?: ""
-            ListViewScreen(navController, topic)
-        }
-
-//        composable("flashcardDetail/{topic}/{id}") { backStackEntry ->
-//            val topic = backStackEntry.arguments?.getString("topic") ?: ""
-//            val id = backStackEntry.arguments?.getString("id") ?: ""
-//            FlashcardDetailScreen(navController, topic, id)
-//        }
-
+        composable(FLASHCARD_ROUTE) { FlashcardScreen(viewModel = flashcardViewModel, onBack = { navController.popBackStack() }) }
+        composable("topicDetail/{topic}") { backStackEntry -> TopicDetailScreen(navController, backStackEntry.arguments?.getString("topic") ?: "") }
+        composable("listView/{topic}") { backStackEntry -> ListViewScreen(navController, backStackEntry.arguments?.getString("topic") ?: "") }
         composable("flashcardDetail/{topicId}/{flashcardId}") { backStackEntry ->
-            val topicId = backStackEntry.arguments?.getString("topicId") ?: ""
-            val flashcardId = backStackEntry.arguments?.getString("flashcardId") ?: ""
-            FlashcardDetailScreen(navController, topicId, flashcardId)
+            FlashcardDetailScreen(
+                navController,
+                backStackEntry.arguments?.getString("topicId") ?: "",
+                backStackEntry.arguments?.getString("flashcardId") ?: ""
+            )
         }
 
-        // --- Profile Screen ---
-        composable(PROFILE_ROUTE) {
-            ProfileScreen(onBack = { navController.popBackStack() })
-        }
-
-        // --- Scheduler Screen ---
-        composable(SCHEDULER_ROUTE) {
-            SchedulerScreen(onBack = { navController.popBackStack() })
-        }
-        composable(QNA_ROUTE) {
-            QnAScreen(parentNavController = navController)
-        }
-
-
-        composable(PUBLISH_QUESTION_ROUTE) {
-            PublishQuestionScreen(onBack = { navController.popBackStack() })
-        }
-
+        // --- Profile / Scheduler / QnA / Publish ---
+        composable(PROFILE_ROUTE) { ProfileScreen(onBack = { navController.popBackStack() }) }
+        composable(SCHEDULER_ROUTE) { SchedulerScreen(onBack = { navController.popBackStack() }) }
+        composable(QNA_ROUTE) { QnAScreen(parentNavController = navController) }
+        composable(PUBLISH_QUESTION_ROUTE) { PublishQuestionScreen(onBack = { navController.popBackStack() }) }
     }
 }
 
@@ -414,4 +407,57 @@ fun registerUser(
         .addOnFailureListener { e ->
             Toast.makeText(context, "Signup failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
+}
+
+fun startNotificationChecker(context: Context) {
+    val db = FirebaseFirestore.getInstance()
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+    val notificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    // Use CoroutineScope for background check
+    val scope = CoroutineScope(Dispatchers.IO)
+    scope.launch {
+        while (true) {
+            val calendar = Calendar.getInstance()
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = calendar.get(Calendar.MINUTE)
+            val todayStr = "today" // adjust to your date format
+
+            try {
+                val snapshot = db.collection("users")
+                    .document(userId)
+                    .collection("events")
+                    .whereEqualTo("date", todayStr)
+                    .get()
+                    .await() // use await from kotlinx-coroutines-play-services
+
+                snapshot.documents.forEach { doc ->
+                    val data = doc.data ?: return@forEach
+                    val eventHour = (data["hour"] as? Long ?: 0L).toInt()
+                    val eventMinute = (data["minute"] as? Long ?: 0L).toInt()
+                    val title = data["title"] as? String ?: "Event"
+                    val desc = data["description"] as? String ?: ""
+
+                    if (eventHour == hour && eventMinute == minute) {
+                        val builder = androidx.core.app.NotificationCompat.Builder(
+                            context,
+                            "scheduler_channel"
+                        )
+                            .setSmallIcon(android.R.drawable.ic_dialog_info)
+                            .setContentTitle(title)
+                            .setContentText(desc)
+                            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                            .setAutoCancel(true)
+
+                        notificationManager.notify(doc.id.hashCode(), builder.build())
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            delay(60000) // wait 1 minute safely
+        }
+    }
 }
