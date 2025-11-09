@@ -84,6 +84,10 @@ class TimerModel : ViewModel() {
             currentCycle = 1
             currentPhase = RepetitivePhase.FOCUS
             remainingTimeMillis = focusMillis
+
+            // Enable DND immediately for the first Focus phase
+            if (enableDND) enableDND(context)
+
             timerState = TimerState.RUNNING
             startCountdown(true, focusMillis, breakMillis, context)
         }
@@ -134,7 +138,9 @@ class TimerModel : ViewModel() {
 
                     if (isRepetitive) {
                         val total = totalCycles.toIntOrNull() ?: 1
+
                         if (currentPhase == RepetitivePhase.FOCUS) {
+                            // End of Focus phase
                             if (enableDND && context != null) disableDND(context)
                             if (currentCycle < total) {
                                 currentPhase = RepetitivePhase.BREAK
@@ -144,6 +150,7 @@ class TimerModel : ViewModel() {
                                 break
                             }
                         } else {
+                            // End of Break phase
                             currentCycle++
                             if (currentCycle <= total) {
                                 currentPhase = RepetitivePhase.FOCUS
@@ -165,12 +172,14 @@ class TimerModel : ViewModel() {
     // DND Helpers
     fun enableDND(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (nm.isNotificationPolicyAccessGranted) nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+        if (nm.isNotificationPolicyAccessGranted)
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
     }
 
     fun disableDND(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (nm.isNotificationPolicyAccessGranted) nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+        if (nm.isNotificationPolicyAccessGranted)
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
     }
 
     fun requestDNDPermission(context: Context) {

@@ -149,12 +149,17 @@ fun AppNavigation() {
             ListViewScreen(navController, topic)
         }
 
-        composable("flashcardDetail/{topic}/{id}") { backStackEntry ->
-            val topic = backStackEntry.arguments?.getString("topic") ?: ""
-            val id = backStackEntry.arguments?.getString("id") ?: ""
-            FlashcardDetailScreen(navController, topic, id)
-        }
+//        composable("flashcardDetail/{topic}/{id}") { backStackEntry ->
+//            val topic = backStackEntry.arguments?.getString("topic") ?: ""
+//            val id = backStackEntry.arguments?.getString("id") ?: ""
+//            FlashcardDetailScreen(navController, topic, id)
+//        }
 
+        composable("flashcardDetail/{topicId}/{flashcardId}") { backStackEntry ->
+            val topicId = backStackEntry.arguments?.getString("topicId") ?: ""
+            val flashcardId = backStackEntry.arguments?.getString("flashcardId") ?: ""
+            FlashcardDetailScreen(navController, topicId, flashcardId)
+        }
 
         // --- Profile Screen ---
         composable(PROFILE_ROUTE) {
