@@ -13,11 +13,15 @@ import androidx.navigation.compose.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QnAScreen(navController: NavHostController) {
-    val navController = rememberNavController()
+fun QnAScreen(parentNavController: NavHostController) {
+    // Local NavController for internal QnA navigation
+    val qnaNavController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "qna_main") {
-
+    NavHost(
+        navController = qnaNavController,
+        startDestination = "qna_main"
+    ) {
+        // ----------------- QnA Main Page -----------------
         composable("qna_main") {
             Column(
                 modifier = Modifier
@@ -28,8 +32,11 @@ fun QnAScreen(navController: NavHostController) {
                 TopAppBar(
                     title = { Text("QnA") },
                     navigationIcon = {
-                        IconButton(onClick = { /* Handle back from main app */ }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        IconButton(onClick = { parentNavController.popBackStack() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
                         }
                     }
                 )
@@ -41,7 +48,7 @@ fun QnAScreen(navController: NavHostController) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Button(
-                        onClick = { navController.navigate("publish_question") },
+                        onClick = { qnaNavController.navigate("publish_question") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
@@ -50,15 +57,16 @@ fun QnAScreen(navController: NavHostController) {
                     }
 
                     Button(
-                        onClick = { navController.navigate("answer_question_screen") },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        onClick = { qnaNavController.navigate("answer_question_screen") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
                     ) {
-                        Text("Answer Question")
+                        Text("Find Questions")
                     }
 
-
                     Button(
-                        onClick = { navController.navigate("published_questions") },
+                        onClick = { qnaNavController.navigate("published_questions") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
@@ -66,45 +74,45 @@ fun QnAScreen(navController: NavHostController) {
                         Text("Published Questions")
                     }
 
-
                     Button(
-                        onClick = { navController.navigate("answered_questions") },
+                        onClick = { qnaNavController.navigate("answered_questions") },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
                     ) {
                         Text("Answered Questions")
                     }
-
                 }
             }
         }
 
+        // ----------------- Sub Pages -----------------
         composable("publish_question") {
-            PublishQuestionScreen(onBack = { navController.popBackStack() })
+            PublishQuestionScreen(onBack = { qnaNavController.popBackStack() })
         }
+
         composable("answer_question_screen") {
-            AnswerQuestionScreen(navController = navController, onBack = { navController.popBackStack() })
+            AnswerQuestionScreen(
+                navController = qnaNavController,
+                onBack = { qnaNavController.popBackStack() }
+            )
         }
 
         composable("submit_answer_screen/{questionId}") { backStackEntry ->
             val questionId = backStackEntry.arguments?.getString("questionId") ?: ""
             SubmitAnswerScreen(
-                navController = navController,
+                navController = qnaNavController,
                 questionId = questionId,
-                onBack = { navController.popBackStack() }
+                onBack = { qnaNavController.popBackStack() }
             )
         }
+
         composable("published_questions") {
-            PublishedQuestionsScreen(onBack = { navController.popBackStack() })
+            PublishedQuestionsScreen(onBack = { qnaNavController.popBackStack() })
         }
+
         composable("answered_questions") {
-            AnsweredQuestionsScreen(onBack = { navController.popBackStack() })
+            AnsweredQuestionsScreen(onBack = { qnaNavController.popBackStack() })
         }
-
-
-
-
-
     }
 }

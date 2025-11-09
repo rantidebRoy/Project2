@@ -32,7 +32,7 @@ fun AnswerQuestionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Answer Questions") },
+                title = { Text("Find Questions") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

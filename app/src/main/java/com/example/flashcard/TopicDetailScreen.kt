@@ -39,4 +39,3 @@ fun TopicDetailScreen(navController: NavController, topic: String) {
         }
     }
 }
-

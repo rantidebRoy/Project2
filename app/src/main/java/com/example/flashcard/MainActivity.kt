@@ -138,6 +138,23 @@ fun AppNavigation() {
         composable(FLASHCARD_ROUTE) {
             FlashcardScreen(viewModel = flashcardViewModel, onBack = { navController.popBackStack() })
         }
+        // --- Flashcard Topic Flow ---
+        composable("topicDetail/{topic}") { backStackEntry ->
+            val topic = backStackEntry.arguments?.getString("topic") ?: ""
+            TopicDetailScreen(navController, topic)
+        }
+
+        composable("listView/{topic}") { backStackEntry ->
+            val topic = backStackEntry.arguments?.getString("topic") ?: ""
+            ListViewScreen(navController, topic)
+        }
+
+        composable("flashcardDetail/{topic}/{id}") { backStackEntry ->
+            val topic = backStackEntry.arguments?.getString("topic") ?: ""
+            val id = backStackEntry.arguments?.getString("id") ?: ""
+            FlashcardDetailScreen(navController, topic, id)
+        }
+
 
         // --- Profile Screen ---
         composable(PROFILE_ROUTE) {
@@ -149,8 +166,9 @@ fun AppNavigation() {
             SchedulerScreen(onBack = { navController.popBackStack() })
         }
         composable(QNA_ROUTE) {
-            QnAScreen(navController = navController)
+            QnAScreen(parentNavController = navController)
         }
+
 
         composable(PUBLISH_QUESTION_ROUTE) {
             PublishQuestionScreen(onBack = { navController.popBackStack() })
