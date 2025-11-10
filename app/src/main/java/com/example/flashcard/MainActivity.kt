@@ -228,7 +228,7 @@ fun MainScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Main Menu", style = MaterialTheme.typography.headlineMedium)
+        Text("Study Buddy", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(20.dp))
 
         Button(onClick = onNavigateToProfile, modifier = Modifier.fillMaxWidth()) {

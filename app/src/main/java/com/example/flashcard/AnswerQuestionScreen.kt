@@ -194,7 +194,7 @@ fun AnswerQuestionScreen(
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("Others' answers") }
+                            ) { Text("Other answers") }
                         }
                     }
                 }
@@ -219,12 +219,12 @@ fun AnswerQuestionScreen(
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text(
-                                                text = "Answer by ${answer["owner_id"] ?: "Unknown"}",
+                                                text = "Answer by ${answer["answerer_id"] ?: "Unknown"}",
                                                 style = MaterialTheme.typography.titleSmall
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
-                                                text = answer["body"]?.toString() ?: "(No Answer Provided)",
+                                                text = answer["answer_body"]?.toString() ?: "(No Answer Provided)",
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
                                         }
