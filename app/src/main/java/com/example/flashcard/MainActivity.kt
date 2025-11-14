@@ -10,6 +10,11 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,13 +24,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.compose.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -35,10 +45,16 @@ import java.util.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.ui.graphics.vector.ImageVector
 
+// --------------------------
+//        ROUTES
+// --------------------------
+private const val SPLASH_ROUTE = "splash"
+private const val INTRO_ROUTE = "intro"
 
-
-// --- Routes ---
 private const val LOGIN_ROUTE = "login_screen"
 private const val SIGNUP_ROUTE = "signup_screen"
 private const val MAIN_ROUTE = "main_app"
@@ -46,16 +62,16 @@ private const val TIMER_ROUTE = "timer_screen"
 private const val FLASHCARD_ROUTE = "flashcard_screen"
 private const val PROFILE_ROUTE = "profile_screen"
 private const val SCHEDULER_ROUTE = "scheduler_screen"
-private const val QNA_ROUTE = "qna_screen" // Add with other routes
-public const val PUBLISH_QUESTION_ROUTE = "publish_question_screen"
+private const val QNA_ROUTE = "qna_screen"
+const val PUBLISH_QUESTION_ROUTE = "publish_question_screen"
 
-
-// --- MainActivity ---
+// --------------------------
+//       MainActivity
+// --------------------------
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Create Notification Channel for API 26+
         createNotificationChannel()
 
         setContent {
@@ -78,7 +94,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// --- ViewModel Factory ---
+// --------------------------
+//   ViewModel Factory
+// --------------------------
 class LoginViewModelFactory(private val sessionManager: SessionManager) :
     ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -90,7 +108,9 @@ class LoginViewModelFactory(private val sessionManager: SessionManager) :
     }
 }
 
-// --- Navigation ---
+// --------------------------
+// Navigation Graph
+// --------------------------
 @Composable
 fun AppNavigationWithNotifications() {
     val navController = rememberNavController()
@@ -101,39 +121,57 @@ fun AppNavigationWithNotifications() {
         viewModel(factory = LoginViewModelFactory(sessionManager))
     val flashcardViewModel: FlashcardViewModel = viewModel()
     val timerModel: TimerModel = viewModel()
-    val startDestination = if (sessionManager.isLoggedIn()) MAIN_ROUTE else LOGIN_ROUTE
 
-    // Launch notification checker in background
-    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    LaunchedEffect(Unit) {
-        startNotificationChecker(context)
-    }
+    val startDestination = SPLASH_ROUTE
+
+    // Background Notification Checker
+    LaunchedEffect(Unit) { startNotificationChecker(context) }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
-        // --- Login Screen ---
+        // --- Splash ---
+        composable(SPLASH_ROUTE) {
+            SplashScreen(navController = navController, sessionManager = sessionManager)
+        }
+
+        // --- Intro ---
+        composable(INTRO_ROUTE) {
+            IntroScreen(navController)
+        }
+
+        // --- Login ---
         composable(LOGIN_ROUTE) {
             LoginScreen(
                 viewModel = loginViewModel,
                 onLoginSuccess = {
                     sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
-                    navController.navigate(MAIN_ROUTE) { popUpTo(LOGIN_ROUTE) { inclusive = true } }
+                    navController.navigate(MAIN_ROUTE) {
+                        popUpTo(LOGIN_ROUTE) { inclusive = true }
+                    }
                 },
                 onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) }
             )
         }
 
-        // --- Signup Screen ---
         composable(SIGNUP_ROUTE) {
-            SignupScreenIntegrated { name, email, password ->
-                registerUser(context, name, email, password) {
-                    sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
-                    navController.navigate(MAIN_ROUTE) { popUpTo(SIGNUP_ROUTE) { inclusive = true } }
+            SignupScreen(
+                onSignup = { name, email, password ->
+                    registerUser(context, name, email, password) {
+                        sessionManager.saveSession(FirebaseAuth.getInstance().currentUser?.uid ?: "")
+                        navController.navigate(MAIN_ROUTE) {
+                            popUpTo(SIGNUP_ROUTE) { inclusive = true }
+                        }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.navigate(LOGIN_ROUTE) {
+                        popUpTo(SIGNUP_ROUTE) { inclusive = true }
+                    }
                 }
-            }
+            )
         }
 
-        // --- Main Screen ---
+        // --- Main App Screen ---
         composable(MAIN_ROUTE) {
             MainScreen(
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
@@ -145,29 +183,42 @@ fun AppNavigationWithNotifications() {
                     FirebaseAuth.getInstance().signOut()
                     sessionManager.clearSession()
                     Toast.makeText(context, "Logged out", Toast.LENGTH_SHORT).show()
-                    navController.navigate(LOGIN_ROUTE) { popUpTo(MAIN_ROUTE) { inclusive = true } }
+                    navController.navigate(LOGIN_ROUTE) {
+                        popUpTo(MAIN_ROUTE) { inclusive = true }
+                    }
                 }
             )
         }
 
-        // --- Timer Screen ---
+        // --- Timer ---
         composable(TIMER_ROUTE) {
-            TimerScreen(viewModel = timerModel, onBack = { navController.popBackStack() }, context = context)
-        }
-
-        // --- Flashcard Screen ---
-        composable(FLASHCARD_ROUTE) { FlashcardScreen(viewModel = flashcardViewModel, onBack = { navController.popBackStack() }) }
-        composable("topicDetail/{topic}") { backStackEntry -> TopicDetailScreen(navController, backStackEntry.arguments?.getString("topic") ?: "") }
-        composable("listView/{topic}") { backStackEntry -> ListViewScreen(navController, backStackEntry.arguments?.getString("topic") ?: "") }
-        composable("flashcardDetail/{topicId}/{flashcardId}") { backStackEntry ->
-            FlashcardDetailScreen(
-                navController,
-                backStackEntry.arguments?.getString("topicId") ?: "",
-                backStackEntry.arguments?.getString("flashcardId") ?: ""
+            TimerScreen(
+                viewModel = timerModel,
+                onBack = { navController.popBackStack() },
+                context = context
             )
         }
 
-        // --- Profile / Scheduler / QnA / Publish ---
+        // --- Flashcard ---
+        composable(FLASHCARD_ROUTE) {
+            FlashcardScreen(viewModel = flashcardViewModel, onBack = { navController.popBackStack() })
+        }
+
+        composable("topicDetail/{topic}") { entry ->
+            TopicDetailScreen(navController, entry.arguments?.getString("topic") ?: "")
+        }
+        composable("listView/{topic}") { entry ->
+            ListViewScreen(navController, entry.arguments?.getString("topic") ?: "")
+        }
+        composable("flashcardDetail/{topicId}/{flashcardId}") { entry ->
+            FlashcardDetailScreen(
+                navController,
+                entry.arguments?.getString("topicId") ?: "",
+                entry.arguments?.getString("flashcardId") ?: ""
+            )
+        }
+
+        // --- Profile, Scheduler, QnA ---
         composable(PROFILE_ROUTE) { ProfileScreen(onBack = { navController.popBackStack() }) }
         composable(SCHEDULER_ROUTE) { SchedulerScreen(onBack = { navController.popBackStack() }) }
         composable(QNA_ROUTE) { QnAScreen(parentNavController = navController) }
@@ -175,7 +226,126 @@ fun AppNavigationWithNotifications() {
     }
 }
 
-// --- MainScreen with DND Permission Prompt ---
+// --------------------------
+//     Splash Screen
+// --------------------------
+@Composable
+fun SplashScreen(navController: NavController, sessionManager: SessionManager) {
+
+    LaunchedEffect(Unit) {
+        delay(2000)
+
+        if (sessionManager.isLoggedIn()) {
+            navController.navigate(MAIN_ROUTE) {
+                popUpTo(SPLASH_ROUTE) { inclusive = true }
+            }
+        } else {
+            navController.navigate(INTRO_ROUTE) {
+                popUpTo(SPLASH_ROUTE) { inclusive = true }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.app_logo),
+            contentDescription = "App Logo",
+            modifier = Modifier.size(250.dp)
+        )
+    }
+}
+
+// --------------------------
+//     Intro Screen
+// --------------------------
+
+@Composable
+fun IntroScreen(navController: NavController) {
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+
+        // App Name
+        Text(
+            text = "Study Buddy",
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Description
+        Text(
+            text = "Learn Smarter. Study Better. Achieve More.\n\n" +
+                    "Features include:\n" +
+                    "• Flashcards: Memorize and revise concepts.\n" +
+                    "• Scheduler: Plan your study sessions.\n" +
+                    "• Timer: Focus with Pomodoro-style timers.\n" +
+                    "• Q&A: Ask questions and get answers.",
+
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+        )
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        // Sign Up Button (same color as Log In)
+        Button(
+            onClick = { navController.navigate(SIGNUP_ROUTE) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(55.dp),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Text(
+                text = "Sign Up",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Log In Button (same color, only pressed effect)
+        Button(
+            onClick = { navController.navigate(LOGIN_ROUTE) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(55.dp),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Text(
+                text = "Log In",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+
+
+// -------------------------------------------------------------
+// Existing Screens — unchanged except routing updated
+// -------------------------------------------------------------
+
+
+
 @Composable
 fun MainScreen(
     onNavigateToTimer: () -> Unit,
@@ -186,10 +356,9 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
-
-    // DND Permission Check
     val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
     var showDndDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -198,7 +367,6 @@ fun MainScreen(
         }
     }
 
-    // Show AlertDialog to request DND permission
     if (showDndDialog) {
         AlertDialog(
             onDismissRequest = { showDndDialog = false },
@@ -209,56 +377,94 @@ fun MainScreen(
                     showDndDialog = false
                     val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
                     context.startActivity(intent)
-                }) {
-                    Text("Grant Access")
-                }
+                }) { Text("Grant Access") }
             },
             dismissButton = {
-                TextButton(onClick = { showDndDialog = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showDndDialog = false }) { Text("Cancel") }
             }
         )
     }
 
+    val buttonModifier = Modifier
+        .fillMaxWidth()
+        .height(55.dp)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Study Buddy", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(20.dp))
 
-        Button(onClick = onNavigateToProfile, modifier = Modifier.fillMaxWidth()) {
-            Text("View Profile")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onNavigateToTimer, modifier = Modifier.fillMaxWidth()) {
-            Text("Timer")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onNavigateToFlashcard, modifier = Modifier.fillMaxWidth()) {
-            Text("Flashcards")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onNavigateToScheduler, modifier = Modifier.fillMaxWidth()) {
-            Text("Scheduler")
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onNavigateToQnA, modifier = Modifier.fillMaxWidth()) {
-            Text("QnA")
-        }
+        // App Title
+        Text(
+            text = "Study Buddy",
+            style = MaterialTheme.typography.displaySmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Your Personal Learning Companion",
+            style = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+            )
+        )
+        Spacer(Modifier.height(32.dp))
 
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
+        // Main buttons with icons
+        MainButton("View Profile", Icons.Default.Person, onNavigateToProfile, buttonModifier)
+        Spacer(Modifier.height(12.dp))
+        MainButton("Timer", Icons.Default.Timer, onNavigateToTimer, buttonModifier)
+        Spacer(Modifier.height(12.dp))
+        MainButton("Flashcards", Icons.Default.MenuBook, onNavigateToFlashcard, buttonModifier)
+        Spacer(Modifier.height(12.dp))
+        MainButton("Scheduler", Icons.Default.CalendarToday, onNavigateToScheduler, buttonModifier)
+        Spacer(Modifier.height(12.dp))
+        MainButton("Q&A", Icons.Default.QuestionAnswer, onNavigateToQnA, buttonModifier)
+        Spacer(Modifier.height(24.dp))
+
+        // Logout button
+        OutlinedButton(
+            onClick = onLogout,
+            modifier = buttonModifier,
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+            ),
+            border = ButtonDefaults.outlinedButtonBorder
+        ) {
+            Icon(Icons.Default.Logout, contentDescription = "Logout", modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(8.dp))
             Text("Logout")
         }
     }
 }
 
-// --- Profile Screen ---
+@Composable
+fun MainButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Icon(icon, contentDescription = text, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(onBack: () -> Unit) {
@@ -270,24 +476,21 @@ fun ProfileScreen(onBack: () -> Unit) {
 
     LaunchedEffect(userId) {
         if (userId != null) {
-            val db = FirebaseFirestore.getInstance()
-            db.collection("users").document(userId).get()
+            FirebaseFirestore.getInstance()
+                .collection("users").document(userId)
+                .get()
                 .addOnSuccessListener { snapshot ->
                     username = snapshot.getString("name")
                     email = snapshot.getString("email")
                     id = snapshot.getLong("id")
-
-                }
-                .addOnFailureListener {
+                }.addOnFailureListener {
                     Toast.makeText(context, "Failed to fetch user data", Toast.LENGTH_SHORT).show()
                 }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+
         TopAppBar(
             title = { Text("User Profile") },
             navigationIcon = {
@@ -298,77 +501,22 @@ fun ProfileScreen(onBack: () -> Unit) {
         )
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(20.dp))
-            Text("Name: ${username ?: "Loading..."}", style = MaterialTheme.typography.bodyLarge)
+            Text("Name: ${username ?: "Loading..."}")
             Spacer(Modifier.height(8.dp))
-            Text("Email: ${email ?: "Loading..."}", style = MaterialTheme.typography.bodyLarge)
+            Text("Email: ${email ?: "Loading..."}")
             Spacer(Modifier.height(8.dp))
-            Text("ID: ${id ?: "Loading..."}", style = MaterialTheme.typography.bodyLarge)
+            Text("ID: ${id ?: "Loading..."}")
             Spacer(Modifier.height(20.dp))
         }
     }
 }
-
-
-// --- Signup Screen Integrated ---
-@Composable
-fun SignupScreenIntegrated(onSignup: (String, String, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    val context = LocalContext.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = {
-                if (name.isNotBlank() && email.isNotBlank() && password.isNotBlank()) {
-                    onSignup(name.trim(), email.trim(), password.trim())
-                } else {
-                    Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Sign Up")
-        }
-    }
-}
-
-// --- Firebase Signup Function ---
+// ------------------------------
+// Firebase Registration
+// ------------------------------
 fun registerUser(
     context: Context,
     name: String,
@@ -381,10 +529,8 @@ fun registerUser(
 
     auth.createUserWithEmailAndPassword(email, password)
         .addOnSuccessListener { result ->
-            val firebaseUser = result.user ?: run {
-                Toast.makeText(context, "Firebase user is null", Toast.LENGTH_LONG).show()
-                return@addOnSuccessListener
-            }
+
+            val firebaseUser = result.user ?: return@addOnSuccessListener
 
             val counterRef = db.collection("counters").document("users")
             val userRef = db.collection("users").document(firebaseUser.uid)
@@ -396,53 +542,53 @@ fun registerUser(
 
                 transaction.set(counterRef, mapOf("userCount" to newId))
                 transaction.set(userRef, mapOf("id" to newId, "name" to name, "email" to email))
+
                 newId
             }.addOnSuccessListener {
                 Toast.makeText(context, "Signup success!", Toast.LENGTH_LONG).show()
                 onSuccess()
-            }.addOnFailureListener { e ->
-                Toast.makeText(context, "Transaction failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }.addOnFailureListener {
+                Toast.makeText(context, "Transaction failed", Toast.LENGTH_LONG).show()
             }
-        }
-        .addOnFailureListener { e ->
+
+        }.addOnFailureListener { e ->
             Toast.makeText(context, "Signup failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
 }
 
+// ------------------------------
+// Background Notification Checker
+// ------------------------------
 fun startNotificationChecker(context: Context) {
     val db = FirebaseFirestore.getInstance()
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
     val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    // Use CoroutineScope for background check
-    val scope = CoroutineScope(Dispatchers.IO)
-    scope.launch {
+    CoroutineScope(Dispatchers.IO).launch {
         while (true) {
             val calendar = Calendar.getInstance()
             val hour = calendar.get(Calendar.HOUR_OF_DAY)
             val minute = calendar.get(Calendar.MINUTE)
-            val todayStr = "today" // adjust to your date format
+            val todayStr = "today"
 
             try {
                 val snapshot = db.collection("users")
-                    .document(userId)
-                    .collection("events")
+                    .document(userId).collection("events")
                     .whereEqualTo("date", todayStr)
-                    .get()
-                    .await() // use await from kotlinx-coroutines-play-services
+                    .get().await()
 
                 snapshot.documents.forEach { doc ->
                     val data = doc.data ?: return@forEach
-                    val eventHour = (data["hour"] as? Long ?: 0L).toInt()
-                    val eventMinute = (data["minute"] as? Long ?: 0L).toInt()
+                    val eventHour = (data["hour"] as? Long)?.toInt() ?: 0
+                    val eventMinute = (data["minute"] as? Long)?.toInt() ?: 0
                     val title = data["title"] as? String ?: "Event"
                     val desc = data["description"] as? String ?: ""
 
                     if (eventHour == hour && eventMinute == minute) {
+
                         val builder = androidx.core.app.NotificationCompat.Builder(
-                            context,
-                            "scheduler_channel"
+                            context, "scheduler_channel"
                         )
                             .setSmallIcon(android.R.drawable.ic_dialog_info)
                             .setContentTitle(title)
@@ -453,11 +599,12 @@ fun startNotificationChecker(context: Context) {
                         notificationManager.notify(doc.id.hashCode(), builder.build())
                     }
                 }
+
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
-            delay(60000) // wait 1 minute safely
+            delay(60000)
         }
     }
 }
