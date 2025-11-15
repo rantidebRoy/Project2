@@ -3,8 +3,10 @@ package com.example.flashcard
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -300,32 +302,73 @@ fun ShuffleFlashcardScreen(
 
 // --- List View with Delete ---
 @Composable
-fun FlashcardListWithDeleteScreen(viewModel: FlashcardViewModel, onBack: () -> Unit, onAddFlashcard: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("Flashcards in ${viewModel.currentTopic?.name}", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+fun FlashcardListWithDeleteScreen(
+    viewModel: FlashcardViewModel,
+    onBack: () -> Unit,
+    onAddFlashcard: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Text(
+            "Flashcards in ${viewModel.currentTopic?.name}",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+
         Spacer(Modifier.height(16.dp))
 
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(viewModel.flashcards.size) { index ->
-                val card = viewModel.flashcards[index]
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Column {
+        LazyColumn(
+            modifier = Modifier.weight(1f)
+        ) {
+            items(viewModel.flashcards) { card ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+
+                        Column(
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        ) {
                             Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
                             Text("A: ${card.answer}")
                         }
-                        Button(onClick = { viewModel.deleteFlashcard(card.id) }) { Text("Delete") }
+
+                        IconButton(
+                            onClick = { viewModel.deleteFlashcard(card.id) },
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Flashcard",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onAddFlashcard, modifier = Modifier.fillMaxWidth()) { Text("Add New Flashcard") }
+
+        Button(
+            onClick = onAddFlashcard,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Add New Flashcard")
+        }
+
         Spacer(Modifier.height(8.dp))
-       // Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
 }
 

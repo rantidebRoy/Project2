@@ -29,7 +29,7 @@ fun ListViewScreen(navController: NavController, topicId: String) {
     var flashcards by remember { mutableStateOf<List<Flashcard>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Load flashcards from Firestore
+    // Load flashcards
     LaunchedEffect(topicId) {
         if (uid == null) return@LaunchedEffect
         db.collection("users")
@@ -48,9 +48,7 @@ fun ListViewScreen(navController: NavController, topicId: String) {
                 }
                 isLoading = false
             }
-            .addOnFailureListener {
-                isLoading = false
-            }
+            .addOnFailureListener { isLoading = false }
     }
 
     Column(
@@ -69,58 +67,53 @@ fun ListViewScreen(navController: NavController, topicId: String) {
             Text("No flashcards found for this topic.")
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(flashcards, key = { it.id }) { card ->
+
                     Card(
                         modifier = Modifier
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .clickable {
+                                navController.navigate("flashcardDetail/$topicId/${card.id}")
+                            },
                         elevation = CardDefaults.cardElevation(4.dp)
                     ) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            // Question text
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
                                 text = card.question,
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .align(Alignment.CenterStart),
-                                style = MaterialTheme.typography.bodyLarge
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
                             )
 
-                            // Trash icon on top-right
-                            IconButton(
-                                onClick = {
-                                    uid?.let { userId ->
-                                        db.collection("users")
-                                            .document(userId)
-                                            .collection("topics")
-                                            .document(topicId)
-                                            .collection("flashcards")
-                                            .document(card.id)
-                                            .delete()
-                                            .addOnSuccessListener {
-                                                flashcards = flashcards.filter { it.id != card.id }
-                                            }
-                                    }
-                                },
-                                modifier = Modifier.align(Alignment.TopEnd)
-                            ) {
+                            IconButton(onClick = {
+                                uid?.let { userId ->
+                                    db.collection("users")
+                                        .document(userId)
+                                        .collection("topics")
+                                        .document(topicId)
+                                        .collection("flashcards")
+                                        .document(card.id)
+                                        .delete()
+                                        .addOnSuccessListener {
+                                            flashcards =
+                                                flashcards.filter { it.id != card.id }
+                                        }
+                                }
+                            }) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Delete Flashcard",
                                     tint = Color.Red
                                 )
                             }
-
-                            // Clickable to navigate to flashcard details
-                            Spacer(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .clickable {
-                                        navController.navigate("flashcardDetail/$topicId/${card.id}")
-                                    }
-                            )
                         }
                     }
                 }

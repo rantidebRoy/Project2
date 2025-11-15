@@ -16,7 +16,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -47,6 +51,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 
 // --------------------------
@@ -207,9 +214,9 @@ fun AppNavigationWithNotifications() {
         composable("topicDetail/{topic}") { entry ->
             TopicDetailScreen(navController, entry.arguments?.getString("topic") ?: "")
         }
-        composable("listView/{topic}") { entry ->
-            ListViewScreen(navController, entry.arguments?.getString("topic") ?: "")
-        }
+//        composable("listView/{topic}") { entry ->
+//            ListViewScreen(navController, entry.arguments?.getString("topic") ?: "")
+//        }
         composable("flashcardDetail/{topicId}/{flashcardId}") { entry ->
             FlashcardDetailScreen(
                 navController,
@@ -290,7 +297,7 @@ fun IntroScreen(navController: NavController) {
 
         // Description
         Text(
-            text = "Learn Smarter. Study Better. Achieve More.\n\n" +
+            text = "Learn Smarter. Study Better. Achieve More.\n" +
                     "Features include:\n" +
                     "• Flashcards: Memorize and revise concepts.\n" +
                     "• Scheduler: Plan your study sessions.\n" +
@@ -343,8 +350,9 @@ fun IntroScreen(navController: NavController) {
 // -------------------------------------------------------------
 // Existing Screens — unchanged except routing updated
 // -------------------------------------------------------------
+// ---------------- MAIN SCREEN ----------------
 
-
+// ---------------- MAIN SCREEN ----------------
 
 @Composable
 fun MainScreen(
@@ -355,113 +363,109 @@ fun MainScreen(
     onNavigateToQnA: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val context = LocalContext.current
-    val notificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    var showDndDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        if (!notificationManager.isNotificationPolicyAccessGranted) {
-            showDndDialog = true
-        }
-    }
-
-    if (showDndDialog) {
-        AlertDialog(
-            onDismissRequest = { showDndDialog = false },
-            title = { Text("Permission Required") },
-            text = { Text("To enable Focus timer, please allow access to Do Not Disturb mode.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDndDialog = false
-                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                    context.startActivity(intent)
-                }) { Text("Grant Access") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDndDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
-
-    val buttonModifier = Modifier
-        .fillMaxWidth()
-        .height(55.dp)
+    val cardItems = listOf(
+        CardItem("Profile", Icons.Default.Person, onNavigateToProfile),
+        CardItem("Timer", Icons.Default.Timer, onNavigateToTimer),
+        CardItem("Flashcards", Icons.Default.MenuBook, onNavigateToFlashcard),
+        CardItem("Scheduler", Icons.Default.CalendarToday, onNavigateToScheduler),
+        CardItem("Q&A", Icons.Default.QuestionAnswer, onNavigateToQnA)
+    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(Color.White)   // ← WHITE BACKGROUND
+            .padding(20.dp)
     ) {
-
-        // App Title
+        // Top Title
         Text(
             text = "Study Buddy",
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Your Personal Learning Companion",
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
-        )
-        Spacer(Modifier.height(32.dp))
-
-        // Main buttons with icons
-        MainButton("View Profile", Icons.Default.Person, onNavigateToProfile, buttonModifier)
-        Spacer(Modifier.height(12.dp))
-        MainButton("Timer", Icons.Default.Timer, onNavigateToTimer, buttonModifier)
-        Spacer(Modifier.height(12.dp))
-        MainButton("Flashcards", Icons.Default.MenuBook, onNavigateToFlashcard, buttonModifier)
-        Spacer(Modifier.height(12.dp))
-        MainButton("Scheduler", Icons.Default.CalendarToday, onNavigateToScheduler, buttonModifier)
-        Spacer(Modifier.height(12.dp))
-        MainButton("Q&A", Icons.Default.QuestionAnswer, onNavigateToQnA, buttonModifier)
-        Spacer(Modifier.height(24.dp))
-
-        // Logout button
-        OutlinedButton(
-            onClick = onLogout,
-            modifier = buttonModifier,
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.error
+            style = MaterialTheme.typography.headlineMedium.copy(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
             ),
-            border = ButtonDefaults.outlinedButtonBorder
+            modifier = Modifier.padding(top = 24.dp, bottom = 24.dp)
+        )
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(Icons.Default.Logout, contentDescription = "Logout", modifier = Modifier.size(24.dp))
+            items(cardItems) { item ->
+                FeatureCard(item)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Logout Button
+        Button(
+            onClick = onLogout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(55.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            ),
+
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.White)
             Spacer(Modifier.width(8.dp))
-            Text("Logout")
+            Text("Logout", color = Color.White)
         }
     }
 }
 
+
+// ---------------- CARD ITEM MODEL ----------------
+
+data class CardItem(
+    val title: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit
+)
+
+
+// ---------------- CARD UI ----------------
+
 @Composable
-fun MainButton(
-    text: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge
+fun FeatureCard(item: CardItem) {
+    Card(
+        modifier = Modifier
+            .height(150.dp)
+            .fillMaxWidth()
+            .clickable { item.onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primary   // ← THEME COLOR FOR CARDS
+        ),
+        shape = RoundedCornerShape(28.dp),
+        elevation = CardDefaults.cardElevation(6.dp)
     ) {
-        Icon(icon, contentDescription = text, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.titleMedium)
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.title,
+                tint = Color.White,
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = item.title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
-
 
 
 
