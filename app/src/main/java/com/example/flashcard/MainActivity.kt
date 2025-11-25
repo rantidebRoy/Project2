@@ -64,6 +64,7 @@ private const val INTRO_ROUTE = "intro"
 
 private const val LOGIN_ROUTE = "login_screen"
 private const val SIGNUP_ROUTE = "signup_screen"
+private const val RESET_PASSWORD_ROUTE = "reset_password_screen"
 private const val MAIN_ROUTE = "main_app"
 private const val TIMER_ROUTE = "timer_screen"
 private const val FLASHCARD_ROUTE = "flashcard_screen"
@@ -156,9 +157,15 @@ fun AppNavigationWithNotifications() {
                         popUpTo(LOGIN_ROUTE) { inclusive = true }
                     }
                 },
-                onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) }
+                onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) },
+                onNavigateToReset = { navController.navigate(RESET_PASSWORD_ROUTE) }   // 👈 NEW
             )
         }
+
+        composable(RESET_PASSWORD_ROUTE) {
+            ResetPasswordScreen(onBack = { navController.popBackStack() })
+        }
+
 
         composable(SIGNUP_ROUTE) {
             SignupScreen(

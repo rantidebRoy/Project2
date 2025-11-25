@@ -14,16 +14,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnsweredQuestionsScreen(onBack: () -> Unit) {
+
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
     val user = FirebaseAuth.getInstance().currentUser
-    var answeredList by remember { mutableStateOf<List<Pair<Map<String, Any>, Map<String, Any>>>>(emptyList()) }
+
+    var answeredQuestions by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     val coroutineScope = rememberCoroutineScope()
@@ -37,40 +39,41 @@ fun AnsweredQuestionsScreen(onBack: () -> Unit) {
 
         coroutineScope.launch {
             try {
-                val userIdSnapshot = db.collection("users").document(user.uid).get().await()
-                val userId = userIdSnapshot.getLong("id") ?: run {
+                // 🔥 1️⃣ Fetch user document
+                val userDoc = db.collection("users")
+                    .document(user.uid)
+                    .get()
+                    .await()
+
+                // 🔥 2️⃣ Get answered_questions field (list of question IDs)
+                val ids = userDoc.get("answered_questions") as? List<String> ?: emptyList()
+
+                if (ids.isEmpty()) {
+                    answeredQuestions = emptyList()
                     isLoading = false
-                    Toast.makeText(context, "User ID not found", Toast.LENGTH_SHORT).show()
                     return@launch
                 }
 
-                val tempList = mutableListOf<Pair<Map<String, Any>, Map<String, Any>>>()
+                // 🔥 3️⃣ Fetch each question by ID
+                val tempList = mutableListOf<Map<String, Any>>()
 
-                // Fetch all questions
-                val questionsSnapshot = db.collection("questions").get().await()
-                for (questionDoc in questionsSnapshot.documents) {
-                    val questionData = questionDoc.data ?: continue
-
-                    // Fetch answers subcollection for this question
-                    val answersSnapshot = db.collection("questions")
-                        .document(questionDoc.id)
-                        .collection("answers")
-                        .whereEqualTo("owner_id", userId)
+                for (id in ids) {
+                    val qSnap = db.collection("questions")
+                        .document(id)
                         .get()
                         .await()
 
-                    for (answerDoc in answersSnapshot.documents) {
-                        val answerData = answerDoc.data ?: continue
-                        tempList.add(questionData to answerData)
+                    qSnap.data?.let { data ->
+                        tempList.add(data + ("id" to id))
                     }
                 }
 
-                answeredList = tempList
+                answeredQuestions = tempList
                 isLoading = false
 
             } catch (e: Exception) {
                 isLoading = false
-                Toast.makeText(context, "Failed to fetch answered questions", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Failed to load answered questions", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -88,51 +91,45 @@ fun AnsweredQuestionsScreen(onBack: () -> Unit) {
         }
     ) { paddingValues ->
         Box(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
             when {
-                isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                answeredList.isEmpty() -> Text(
-                    text = "You haven’t answered any questions yet.",
-                    modifier = Modifier.align(Alignment.Center)
-                )
-                else -> LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                ) {
-                    items(answeredList) { (question, answer) ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            Column(
+                isLoading -> {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                }
+
+                answeredQuestions.isEmpty() -> {
+                    Text(
+                        "You haven’t answered any questions yet.",
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        items(answeredQuestions) { question ->
+                            Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp)
+                                    .padding(vertical = 8.dp)
                             ) {
-                                Text(
-                                    text = question["title"]?.toString() ?: "(No Title)",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = question["body"]?.toString() ?: "(No Description)",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Your Answer:",
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = answer["body"]?.toString() ?: "(No Answer Provided)",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Column(Modifier.padding(16.dp)) {
+                                    Text(
+                                        question["title"]?.toString() ?: "(No Title)",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        question["body"]?.toString() ?: "(No Body)",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
                             }
                         }
                     }

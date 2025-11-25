@@ -32,7 +32,7 @@ fun SubmitAnswerScreen(
     var isLoading by remember { mutableStateOf(true) }
     var answerBody by remember { mutableStateOf("") }
 
-    // Fetch the question details
+    // Load question details
     LaunchedEffect(questionId) {
         db.collection("questions").document(questionId).get()
             .addOnSuccessListener { doc ->
@@ -59,30 +59,42 @@ fun SubmitAnswerScreen(
                 actions = {
                     TextButton(
                         onClick = {
-                            if (answerBody.isNotBlank() && userUid != null) {
-                                db.collection("users").document(userUid).get()
-                                    .addOnSuccessListener { userDoc ->
-                                        val userId = userDoc.getLong("id")
-                                        val answerData = mapOf(
-                                            "answer_body" to answerBody.trim(),
-                                            "answerer_id" to userId,
-                                            "timestamp" to FieldValue.serverTimestamp()
-                                        )
-                                        db.collection("questions")
-                                            .document(questionId)
-                                            .collection("answers")
-                                            .add(answerData)
-                                            .addOnSuccessListener {
-                                                Toast.makeText(context, "Answer submitted!", Toast.LENGTH_SHORT).show()
-                                                navController.popBackStack() // Go back to search results
-                                            }
-                                            .addOnFailureListener { e ->
-                                                Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                                            }
-                                    }
-                            } else {
+                            if (answerBody.isBlank() || userUid == null) {
                                 Toast.makeText(context, "Write an answer first", Toast.LENGTH_SHORT).show()
+                                return@TextButton
                             }
+
+                            // Fetch user ID
+                            db.collection("users").document(userUid).get()
+                                .addOnSuccessListener { userDoc ->
+                                    val appUserId = userDoc.getLong("id")
+
+                                    val answerData = mapOf(
+                                        "answer_body" to answerBody.trim(),
+                                        "answerer_id" to appUserId,
+                                        "timestamp" to FieldValue.serverTimestamp()
+                                    )
+
+                                    // Save answer
+                                    db.collection("questions")
+                                        .document(questionId)
+                                        .collection("answers")
+                                        .add(answerData)
+                                        .addOnSuccessListener {
+
+                                            // 🔥 REQUIRED PART YOU ASKED FOR — Add questionId to user's "answered_questions"
+                                            db.collection("users")
+                                                .document(userUid)
+                                                .update("answered_questions", FieldValue.arrayUnion(questionId))
+
+                                            Toast.makeText(context, "Answer submitted!", Toast.LENGTH_SHORT).show()
+
+                                            navController.popBackStack()
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                }
                         }
                     ) {
                         Text("Submit")
@@ -92,7 +104,10 @@ fun SubmitAnswerScreen(
         }
     ) { paddingValues ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
         } else {
@@ -101,20 +116,23 @@ fun SubmitAnswerScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Show question info
+                // Question Title
                 Text(
                     text = questionTitle ?: "No title",
                     style = MaterialTheme.typography.titleLarge
                 )
                 Spacer(Modifier.height(8.dp))
+
+                // Question Body
                 Text(
                     text = questionBody ?: "No body",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(8.dp))
+
+                // Tag
                 Text(
                     text = "Tag: ${questionTag ?: "N/A"}",
                     style = MaterialTheme.typography.labelMedium
@@ -122,6 +140,7 @@ fun SubmitAnswerScreen(
 
                 Spacer(Modifier.height(32.dp))
 
+                // Answer Input
                 OutlinedTextField(
                     value = answerBody,
                     onValueChange = { answerBody = it },

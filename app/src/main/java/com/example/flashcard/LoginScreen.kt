@@ -9,14 +9,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-// Assuming necessary dependencies (LoginViewModel, AuthState, etc.) are defined elsewhere.
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
     onLoginSuccess: () -> Unit,
-    onNavigateToSignup: () -> Unit
+    onNavigateToSignup: () -> Unit,
+    onNavigateToReset: () -> Unit      // <-- Added
 ) {
     val isLoading = viewModel.authState == AuthState.LOADING
     val isInputValid = viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
@@ -43,7 +42,7 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding) // Apply padding from the top app bar
+                .padding(innerPadding)
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -51,7 +50,6 @@ fun LoginScreen(
             Text("Welcome to Study Buddy", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 1. Email Field
             OutlinedTextField(
                 value = viewModel.email,
                 onValueChange = { viewModel.email = it },
@@ -62,7 +60,6 @@ fun LoginScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. Password Field
             OutlinedTextField(
                 value = viewModel.password,
                 onValueChange = { viewModel.password = it },
@@ -72,9 +69,15 @@ fun LoginScreen(
                 enabled = !isLoading,
                 singleLine = true
             )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ******** NEW: RESET PASSWORD BUTTON ********
+            TextButton(onClick = onNavigateToReset) {
+                Text("Forgot Password?")
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 3. Log In Button
             Button(
                 onClick = { viewModel.login() },
                 modifier = Modifier.fillMaxWidth(),
@@ -82,9 +85,9 @@ fun LoginScreen(
             ) {
                 Text("Log In")
             }
+
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 4. Navigation to Sign Up (TextButton for better look)
             TextButton(
                 onClick = onNavigateToSignup,
                 enabled = !isLoading
@@ -92,11 +95,11 @@ fun LoginScreen(
                 Text("Don't have an account? Sign Up")
             }
 
-            // 5. Loading/Error Display
             if (isLoading) {
                 Spacer(modifier = Modifier.height(16.dp))
                 CircularProgressIndicator()
             }
+
             if (!errorMessage.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -108,4 +111,3 @@ fun LoginScreen(
         }
     }
 }
-
