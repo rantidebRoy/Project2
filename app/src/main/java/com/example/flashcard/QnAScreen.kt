@@ -9,7 +9,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +114,38 @@ fun QnAScreen(parentNavController: NavHostController) {
         }
 
         composable("answered_questions") {
-            AnsweredQuestionsScreen(onBack = { qnaNavController.popBackStack() })
+            AnsweredQuestionsScreen(
+                onBack = { qnaNavController.popBackStack() },
+                navigateToAnswers = { questionId ->
+                    qnaNavController.navigate("answer_list/$questionId")
+                }
+            )
         }
+
+        // <-- IMPORTANT: register this route so navigate("answer_list/$questionId") actually works -->
+        composable(
+            "answer_list/{questionId}",
+            arguments = listOf(navArgument("questionId") { type = androidx.navigation.NavType.StringType })
+        ) { backStackEntry ->
+            val questionId = backStackEntry.arguments?.getString("questionId") ?: ""
+            AnswerListScreen(
+                questionId = questionId,
+                navController = qnaNavController,             // ✅ FIXED
+                onBack = { qnaNavController.popBackStack() }
+            )
+        }
+        // --- SHOW OTHER ANSWERS FROM AnswerListScreen ---
+        composable(
+            "other_answers_screen/{questionId}",
+            arguments = listOf(navArgument("questionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val questionId = backStackEntry.arguments?.getString("questionId") ?: ""
+            OtherAnswersListScreen(
+                questionId = questionId,
+                onBack = { qnaNavController.popBackStack() }
+            )
+        }
+
+
     }
 }
