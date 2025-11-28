@@ -12,40 +12,64 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
+// -----------------------------
+// Dark Theme (same as light)
+// -----------------------------
 private val DarkColorScheme = darkColorScheme(
-    primary = Navy80,
+    primary = Navy40,
     onPrimary = Color.White,
 
-    secondary = NavyGrey80,
+    secondary = NavyGrey40,
     onSecondary = Color.White,
 
-    tertiary = NavyAccent80,
+    tertiary = NavyAccent40,
     onTertiary = Color.White,
 
-    background = Color(0xFF0B0F26),
-    onBackground = Color.White,
+    background = Color.White,      // PURE WHITE
+    onBackground = Color.Black,
 
-    surface = Color(0xFF0F1A40),
-    onSurface = Color.White,
+    surface = Color.White,         // PURE WHITE
+    onSurface = Color.Black,
 
-    surfaceVariant = Color(0xFF1C2A57),
-    onSurfaceVariant = Color.White
+    surfaceVariant = Color.White,
+    onSurfaceVariant = Color.Black
 )
 
+// -----------------------------
+// Light Theme (same as dark)
+// -----------------------------
 private val LightColorScheme = lightColorScheme(
     primary = Navy40,
+    onPrimary = Color.White,
+
     secondary = NavyGrey40,
-    tertiary = NavyAccent40
+    onSecondary = Color.White,
+
+    tertiary = NavyAccent40,
+    onTertiary = Color.White,
+
+    background = Color.White,      // PURE WHITE
+    onBackground = Color.Black,
+
+    surface = Color.White,         // PURE WHITE
+    onSurface = Color.Black,
+
+    surfaceVariant = Color.White,
+    onSurfaceVariant = Color.Black
 )
 
 
+// -----------------------------
+// Main Theme
+// -----------------------------
 @Composable
 fun FlashcardTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    // Use same color scheme for both light & dark
+    val colorScheme = LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,

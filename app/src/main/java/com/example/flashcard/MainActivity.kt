@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.flashcard.ui.theme.FlashcardTheme
 
 // --------------------------
 //        ROUTES
@@ -109,7 +110,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            FlashcardTheme {
                 AppNavigationWithNotifications()
             }
         }
@@ -526,7 +527,7 @@ fun ProfileScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
         TopAppBar(
             title = { Text("User Profile") },
