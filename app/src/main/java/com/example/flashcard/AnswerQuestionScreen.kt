@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -32,13 +34,29 @@ fun AnswerQuestionScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // ---------------- USER SEQUENTIAL ID ----------------
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    var sequentialId by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(userId) {
+        if (userId.isNotEmpty()) {
+            db.collection("users").document(userId).get()
+                .addOnSuccessListener { snap ->
+                    sequentialId = snap.getLong("id")?.toInt()
+                }
+                .addOnFailureListener {
+                    Toast.makeText(context, "Failed to load ID", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
     // Search state
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var tagSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Selected question & view
+    // Selected question
     var selectedQuestion by remember { mutableStateOf<Map<String, Any>?>(null) }
     var subView by remember { mutableStateOf("main") }
 
@@ -46,7 +64,7 @@ fun AnswerQuestionScreen(
     var otherAnswers by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var loadingOthers by remember { mutableStateOf(false) }
 
-    // 🔎 REALTIME TAG SUGGESTIONS
+    // ---------------- TAG SUGGESTIONS ----------------
     LaunchedEffect(searchQuery) {
         if (searchQuery.isBlank()) {
             tagSuggestions = emptyList()
@@ -57,12 +75,12 @@ fun AnswerQuestionScreen(
             val snapshot = db.collection("qna_tag")
                 .whereGreaterThanOrEqualTo("name", searchQuery)
                 .whereLessThanOrEqualTo("name", searchQuery + "\uf8ff")
-                .limit(3) // ▩ Show at most 3 items
+                .limit(3)
                 .get()
                 .await()
 
             tagSuggestions = snapshot.documents.mapNotNull { it.getString("name") }
-        } catch (_: Exception) {}
+        } catch (_: Exception) { }
     }
 
     Scaffold(
@@ -82,19 +100,20 @@ fun AnswerQuestionScreen(
             )
         }
     ) { paddingValues ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+
             when (subView) {
 
-                // ------------------------------- MAIN SEARCH VIEW -------------------------------
+                // ---------------- MAIN SEARCH VIEW ----------------
                 "main" -> {
                     Column(modifier = Modifier.fillMaxWidth()) {
 
-                        // TEXT FIELD
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -102,7 +121,6 @@ fun AnswerQuestionScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // ▼ DROPDOWN SHOWING MATCHING TAGS
                         if (tagSuggestions.isNotEmpty()) {
                             Card(
                                 modifier = Modifier
@@ -111,20 +129,16 @@ fun AnswerQuestionScreen(
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 LazyColumn(
-                                    modifier = Modifier
-                                        .heightIn(max = 150.dp) // scrollable max height
-                                        .background(Color.White)
+                                    modifier = Modifier.heightIn(max = 150.dp)
                                 ) {
                                     items(tagSuggestions) { tag ->
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    // Select tag from dropdown
                                                     searchQuery = tag
                                                     tagSuggestions = emptyList()
 
-                                                    // Auto-search immediately
                                                     isLoading = true
                                                     scope.launch {
                                                         try {
@@ -136,8 +150,6 @@ fun AnswerQuestionScreen(
                                                             searchResults = snapshot.documents.mapNotNull {
                                                                 it.data?.plus("id" to it.id)
                                                             }
-                                                        } catch (_: Exception) {
-                                                            Toast.makeText(context, "Search failed", Toast.LENGTH_SHORT).show()
                                                         } finally {
                                                             isLoading = false
                                                         }
@@ -154,7 +166,6 @@ fun AnswerQuestionScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // SEARCH BUTTON
                         Button(
                             onClick = {
                                 if (searchQuery.isBlank()) {
@@ -173,12 +184,6 @@ fun AnswerQuestionScreen(
                                         searchResults = snapshot.documents.mapNotNull {
                                             it.data?.plus("id" to it.id)
                                         }
-
-                                        if (searchResults.isEmpty()) {
-                                            Toast.makeText(context, "No questions found", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } catch (_: Exception) {
-                                        Toast.makeText(context, "Search failed", Toast.LENGTH_SHORT).show()
                                     } finally {
                                         isLoading = false
                                     }
@@ -189,25 +194,23 @@ fun AnswerQuestionScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // SEARCH RESULTS
                         if (isLoading) {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                        } else if (searchResults.isNotEmpty()) {
+                        } else {
                             LazyColumn {
-                                items(searchResults) { question ->
+                                items(searchResults) { q ->
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(vertical = 6.dp)
                                             .clickable {
-                                                selectedQuestion = question
+                                                selectedQuestion = q
                                                 subView = "question_detail"
                                             }
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {
-                                            Text(question["title"].toString())
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(question["body"].toString())
+                                            Text(q["title"].toString())
+                                            Text(q["body"].toString())
                                         }
                                     }
                                 }
@@ -216,7 +219,7 @@ fun AnswerQuestionScreen(
                     }
                 }
 
-                // ------------------------------- QUESTION DETAIL -------------------------------
+                // ---------------- QUESTION DETAIL ----------------
                 "question_detail" -> {
                     selectedQuestion?.let { question ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -247,11 +250,9 @@ fun AnswerQuestionScreen(
                                                 .get()
                                                 .await()
 
-                                            otherAnswers = snapshot.documents.mapNotNull { d ->
-                                                d.data?.plus("id" to d.id)
+                                            otherAnswers = snapshot.documents.mapNotNull {
+                                                it.data?.plus("id" to it.id)
                                             }
-                                        } catch (_: Exception) {
-                                            Toast.makeText(context, "Failed to load answers", Toast.LENGTH_SHORT).show()
                                         } finally {
                                             loadingOthers = false
                                         }
@@ -263,9 +264,10 @@ fun AnswerQuestionScreen(
                     }
                 }
 
-                // ------------------------------- OTHER ANSWERS -------------------------------
+                // ---------------- OTHER ANSWERS ----------------
                 "others_answers" -> {
                     Column {
+
                         if (loadingOthers) {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                         } else if (otherAnswers.isEmpty()) {
@@ -273,19 +275,77 @@ fun AnswerQuestionScreen(
                         } else {
                             LazyColumn {
                                 items(otherAnswers) { ans ->
+
+                                    val answererId = ans["answerer_id"]?.toString()
+                                    val answerId = ans["id"].toString()
+                                    val questionId = selectedQuestion!!["id"].toString()
+
+                                    val isMine = sequentialId != null && answererId == sequentialId.toString()
+
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(8.dp)
                                     ) {
                                         Column(Modifier.padding(16.dp)) {
-                                            Text("Answer by: ${ans["answerer_id"]}")
+
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "Answer by: " +
+                                                            if (isMine) "me"
+                                                            else answererId
+                                                )
+
+                                                if (isMine) {
+                                                    IconButton(onClick = {
+                                                        scope.launch {
+                                                            try {
+                                                                db.collection("questions")
+                                                                    .document(questionId)
+                                                                    .collection("answers")
+                                                                    .document(answerId)
+                                                                    .delete()
+                                                                    .await()
+
+                                                                otherAnswers =
+                                                                    otherAnswers.filter { it["id"] != answerId }
+
+                                                                Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                                                            } catch (e: Exception) {
+                                                                Toast.makeText(context, "Delete failed", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        }
+                                                    }) {
+                                                        Icon(
+                                                            Icons.Default.Delete,
+                                                            contentDescription = "Delete Answer",
+                                                            tint = Color.Red
+                                                        )
+                                                    }
+                                                }
+                                            }
+
                                             Spacer(Modifier.height(4.dp))
                                             Text(ans["answer_body"].toString())
                                         }
                                     }
                                 }
                             }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        // Show My Sequential ID
+                        sequentialId?.let {
+                            Text(
+                                "My Sequential ID: $it",
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                                color = Color.Gray
+                            )
                         }
                     }
                 }

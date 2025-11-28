@@ -54,15 +54,9 @@ fun AnswerListScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ⭐ NEW BUTTON: MY ANSWERS
-            Button(
-                onClick = { navController.navigate("my_answers_screen/$questionId") },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("My Answers")
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+
+
         }
     }
 }

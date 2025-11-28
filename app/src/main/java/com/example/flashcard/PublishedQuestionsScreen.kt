@@ -1,6 +1,7 @@
 package com.example.flashcard
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,16 +12,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PublishedQuestionsScreen(onBack: () -> Unit) {
+fun PublishedQuestionsScreen(
+    onBack: () -> Unit,
+    onOpenAnswers: (String) -> Unit    // ⭐ ADDED
+) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
     val user = FirebaseAuth.getInstance().currentUser
@@ -30,7 +34,7 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
     var publishedQuestions by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // --- Step 1: Fetch user's sequential id from Firestore ---
+    // --- Fetch user's sequential id ---
     LaunchedEffect(user?.uid) {
         val uid = user?.uid
         if (uid != null) {
@@ -38,12 +42,13 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
                 .addOnSuccessListener { snapshot ->
                     userId = snapshot.getLong("id")
                     if (userId != null) {
-                        // Step 2: Fetch all questions for this user
                         db.collection("questions")
                             .whereEqualTo("owner_id", userId)
                             .get()
                             .addOnSuccessListener { querySnapshot ->
-                                publishedQuestions = querySnapshot.documents.mapNotNull { it.data?.plus("docId" to it.id) }
+                                publishedQuestions = querySnapshot.documents.mapNotNull {
+                                    it.data?.plus("docId" to it.id)
+                                }
                                 isLoading = false
                             }
                             .addOnFailureListener {
@@ -77,6 +82,7 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
             )
         }
     ) { paddingValues ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,11 +106,20 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
                             .fillMaxSize()
                             .padding(16.dp)
                     ) {
-                        items(publishedQuestions, key = { it["docId"].toString() }) { question ->
+                        items(
+                            items = publishedQuestions,
+                            key = { it["docId"].toString() }
+                        ) { question ->
+
+                            val docId = question["docId"].toString()
+
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 8.dp)
+                                    .clickable {
+                                        onOpenAnswers(docId)   // ⭐ OPEN SAME ANSWER SCREEN
+                                    }
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -116,6 +131,7 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
+
                                         Column {
                                             Text(
                                                 text = question["title"]?.toString() ?: "(No Title)",
@@ -132,17 +148,18 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
                                                 style = MaterialTheme.typography.labelMedium
                                             )
                                         }
+
                                         IconButton(
                                             onClick = {
-                                                val docId = question["docId"]?.toString() ?: return@IconButton
                                                 coroutineScope.launch {
                                                     try {
-                                                        // Delete all answers in the subcollection
+                                                        // Delete all answers first
                                                         val answersSnapshot = db.collection("questions")
                                                             .document(docId)
                                                             .collection("answers")
                                                             .get()
                                                             .await()
+
                                                         for (answerDoc in answersSnapshot.documents) {
                                                             db.collection("questions")
                                                                 .document(docId)
@@ -151,12 +168,16 @@ fun PublishedQuestionsScreen(onBack: () -> Unit) {
                                                                 .delete()
                                                                 .await()
                                                         }
-                                                        // Delete the question itself
+
+                                                        // Delete question
                                                         db.collection("questions").document(docId).delete().await()
-                                                        publishedQuestions = publishedQuestions.filter { it["docId"] != docId }
+
+                                                        publishedQuestions =
+                                                            publishedQuestions.filter { it["docId"] != docId }
+
                                                         Toast.makeText(context, "Question deleted", Toast.LENGTH_SHORT).show()
                                                     } catch (e: Exception) {
-                                                        Toast.makeText(context, "Delete failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(context, "Delete failed", Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
                                             }

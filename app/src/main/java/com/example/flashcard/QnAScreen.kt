@@ -68,7 +68,9 @@ fun QnAScreen(parentNavController: NavHostController) {
                     }
 
                     Button(
-                        onClick = { qnaNavController.navigate("published_questions") },
+                        onClick = {
+                            qnaNavController.navigate("published_questions")
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
@@ -109,10 +111,17 @@ fun QnAScreen(parentNavController: NavHostController) {
             )
         }
 
+        // ----------------- Published Questions -----------------
         composable("published_questions") {
-            PublishedQuestionsScreen(onBack = { qnaNavController.popBackStack() })
+            PublishedQuestionsScreen(
+                onBack = { qnaNavController.popBackStack() },
+                onOpenAnswers = { questionId ->
+                    qnaNavController.navigate("other_answers_screen/$questionId")
+                }
+            )
         }
 
+        // ----------------- Answered Questions -----------------
         composable("answered_questions") {
             AnsweredQuestionsScreen(
                 onBack = { qnaNavController.popBackStack() },
@@ -122,19 +131,19 @@ fun QnAScreen(parentNavController: NavHostController) {
             )
         }
 
-        // <-- IMPORTANT: register this route so navigate("answer_list/$questionId") actually works -->
+        // ----------------- Other Answers -----------------
         composable(
             "answer_list/{questionId}",
-            arguments = listOf(navArgument("questionId") { type = androidx.navigation.NavType.StringType })
+            arguments = listOf(navArgument("questionId") { type = NavType.StringType })
         ) { backStackEntry ->
             val questionId = backStackEntry.arguments?.getString("questionId") ?: ""
             AnswerListScreen(
                 questionId = questionId,
-                navController = qnaNavController,             // ✅ FIXED
+                navController = qnaNavController,
                 onBack = { qnaNavController.popBackStack() }
             )
         }
-        // --- SHOW OTHER ANSWERS FROM AnswerListScreen ---
+
         composable(
             "other_answers_screen/{questionId}",
             arguments = listOf(navArgument("questionId") { type = NavType.StringType })
@@ -145,16 +154,13 @@ fun QnAScreen(parentNavController: NavHostController) {
                 onBack = { qnaNavController.popBackStack() }
             )
         }
+
         composable("my_answers_screen/{questionId}") { backStackEntry ->
-            val qId = backStackEntry.arguments?.getString("questionId")!!
+            val qId = backStackEntry.arguments?.getString("questionId") ?: ""
             MyAnswersScreen(
                 questionId = qId,
-                //navController = qnaNavController,
                 onBack = { qnaNavController.popBackStack() }
             )
         }
-
-
-
     }
 }
