@@ -89,6 +89,18 @@ fun SchedulerScreen(onBack: () -> Unit) {
                         .add(event)
                         .addOnSuccessListener {
                             Toast.makeText(context, "Event saved!", Toast.LENGTH_SHORT).show()
+
+                            // >>> FIX: Schedule the system notification immediately <<<
+                            NotificationScheduler.scheduleEvent(
+                                context = context,
+                                title = title,
+                                description = description,
+                                dateType = date, // "today" or "tomorrow"
+                                hour = hour,
+                                minute = minute
+                            )
+                            // >>> END FIX <<<
+
                             currentView = "main"
                         }
                         .addOnFailureListener { e ->
