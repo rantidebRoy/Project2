@@ -1,14 +1,10 @@
 package com.example.flashcard
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -40,7 +36,6 @@ fun AnswerListScreen(
                 .padding(16.dp)
         ) {
 
-            // 🔥 Show two main actions exactly like AnswerQuestionScreen
             Button(
                 onClick = { navController.navigate("submit_answer_screen/$questionId") },
                 modifier = Modifier.fillMaxWidth()
@@ -54,21 +49,20 @@ fun AnswerListScreen(
                 onClick = { navController.navigate("other_answers_screen/$questionId") },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Other Answers")
+                Text("Previous Answers")
             }
-
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                "Your Answered Questions",
-                style = MaterialTheme.typography.titleMedium
-            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // If you want to show a list of your answers, place it here
-            // (this part depends on how you load your data)
+            // ⭐ NEW BUTTON: MY ANSWERS
+            Button(
+                onClick = { navController.navigate("my_answers_screen/$questionId") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("My Answers")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

@@ -145,6 +145,15 @@ fun QnAScreen(parentNavController: NavHostController) {
                 onBack = { qnaNavController.popBackStack() }
             )
         }
+        composable("my_answers_screen/{questionId}") { backStackEntry ->
+            val qId = backStackEntry.arguments?.getString("questionId")!!
+            MyAnswersScreen(
+                questionId = qId,
+                //navController = qnaNavController,
+                onBack = { qnaNavController.popBackStack() }
+            )
+        }
+
 
 
     }
