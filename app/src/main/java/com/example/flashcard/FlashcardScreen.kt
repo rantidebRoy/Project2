@@ -51,17 +51,74 @@ class FlashcardViewModel : ViewModel() {
             .get()
             .addOnSuccessListener { result ->
                 topics = result.documents.map { doc ->
-                    Topic(doc.id, doc.getString("name") ?: "")
+                    // Safely read "id" field (convert to String if it's not a String)
+                    val fieldId = doc.get("id")?.toString()
+                    Topic(
+                        id = fieldId ?: "",   // empty if not present
+                        name = doc.getString("name") ?: ""
+                    )
                 }
             }
     }
 
+    // --- Add Topic With Incremental ID Based on User's Own ID Field ---
     fun addTopic(name: String, onDone: () -> Unit) {
         val uid = auth.currentUser?.uid ?: return
-        val topic = hashMapOf("name" to name)
-        db.collection("users").document(uid).collection("topics")
-            .add(topic)
-            .addOnSuccessListener {
+
+        val userRef = db.collection("users").document(uid)
+        val topicsRef = userRef.collection("topics")
+
+        userRef.get().addOnSuccessListener { userDoc ->
+
+            // Safely read user's stored id field and convert to String
+            val userId = userDoc.get("id")?.toString() ?: return@addOnSuccessListener
+
+            topicsRef.get().addOnSuccessListener { result ->
+
+                // READ EXISTING incremental topic IDs (safely converting non-string id fields)
+                val existingNumbers = result.documents.mapNotNull { doc ->
+                    val fieldId = doc.get("id")?.toString() ?: doc.id
+                    if (fieldId.startsWith("${userId}f")) {
+                        fieldId.substringAfter("f").toIntOrNull()
+                    } else null
+                }
+
+                // CALCULATE NEXT ID
+                val nextNumber = (existingNumbers.maxOrNull() ?: 0) + 1
+                val newTopicId = "${userId}f$nextNumber"  // ← correct
+
+                // SAVE AS FIELD ("id") INSIDE DOCUMENT, NOT AS DOC ID
+                val data = hashMapOf(
+                    "id" to newTopicId,
+                    "name" to name
+                )
+
+                // keep Firestore auto-random document ID
+                topicsRef.document()
+                    .set(data)
+                    .addOnSuccessListener {
+                        loadTopics()
+                        onDone()
+                    }
+            }.addOnFailureListener {
+                // optionally handle failure (network, permissions)
+            }
+        }.addOnFailureListener {
+            // optionally handle failure (user doc missing / network)
+        }
+    }
+
+    fun deleteTopic(topicId: String, onDone: () -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+
+        val topicsRef = db.collection("users").document(uid).collection("topics")
+
+        // delete topic by searching for field "id"
+        topicsRef.whereEqualTo("id", topicId).get()
+            .addOnSuccessListener { result ->
+                for (doc in result.documents) {
+                    doc.reference.delete()
+                }
                 loadTopics()
                 onDone()
             }
@@ -70,45 +127,68 @@ class FlashcardViewModel : ViewModel() {
     fun loadFlashcards(topic: Topic) {
         val uid = auth.currentUser?.uid ?: return
         currentTopic = topic
+
+        // find the document that has this topic.id field
         db.collection("users").document(uid)
-            .collection("topics").document(topic.id)
-            .collection("flashcards")
+            .collection("topics")
+            .whereEqualTo("id", topic.id)
             .get()
-            .addOnSuccessListener { result ->
-                flashcards = result.documents.map { doc ->
-                    Flashcard(
-                        id = doc.id,
-                        question = doc.getString("question") ?: "",
-                        answer = doc.getString("answer") ?: ""
-                    )
-                }
+            .addOnSuccessListener { topicDocs ->
+                val topicDoc = topicDocs.documents.firstOrNull() ?: return@addOnSuccessListener
+
+                topicDoc.reference.collection("flashcards")
+                    .get()
+                    .addOnSuccessListener { result ->
+                        flashcards = result.documents.map { doc ->
+                            Flashcard(
+                                id = doc.id,
+                                question = doc.get("question")?.toString() ?: "",
+                                answer = doc.get("answer")?.toString() ?: ""
+                            )
+                        }
+                    }
             }
     }
 
     fun addFlashcard(question: String, answer: String, onDone: () -> Unit) {
         val uid = auth.currentUser?.uid ?: return
         val topic = currentTopic ?: return
-        val flashcard = hashMapOf("question" to question, "answer" to answer)
+
         db.collection("users").document(uid)
-            .collection("topics").document(topic.id)
-            .collection("flashcards")
-            .add(flashcard)
-            .addOnSuccessListener {
-                loadFlashcards(topic)
-                onDone()
+            .collection("topics")
+            .whereEqualTo("id", topic.id)
+            .get()
+            .addOnSuccessListener { topicDocs ->
+                val topicDoc = topicDocs.documents.firstOrNull() ?: return@addOnSuccessListener
+
+                val flashcard = hashMapOf("question" to question, "answer" to answer)
+
+                topicDoc.reference.collection("flashcards")
+                    .add(flashcard)
+                    .addOnSuccessListener {
+                        loadFlashcards(topic)
+                        onDone()
+                    }
             }
     }
 
     fun deleteFlashcard(flashcardId: String) {
         val uid = auth.currentUser?.uid ?: return
         val topic = currentTopic ?: return
+
         db.collection("users").document(uid)
-            .collection("topics").document(topic.id)
-            .collection("flashcards")
-            .document(flashcardId)
-            .delete()
-            .addOnSuccessListener {
-                loadFlashcards(topic)
+            .collection("topics")
+            .whereEqualTo("id", topic.id)
+            .get()
+            .addOnSuccessListener { topicDocs ->
+                val topicDoc = topicDocs.documents.firstOrNull() ?: return@addOnSuccessListener
+
+                topicDoc.reference.collection("flashcards")
+                    .document(flashcardId)
+                    .delete()
+                    .addOnSuccessListener {
+                        loadFlashcards(topic)
+                    }
             }
     }
 }
@@ -118,7 +198,6 @@ class FlashcardViewModel : ViewModel() {
 @Composable
 fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
     var currentView by remember { mutableStateOf("topics") }
-    var topicViewMode by remember { mutableStateOf("options") }
     var shuffledFlashcards by remember { mutableStateOf<List<Flashcard>>(emptyList()) }
     var currentShuffleIndex by remember { mutableStateOf(0) }
     var showAnswer by remember { mutableStateOf(false) }
@@ -175,6 +254,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
 
                 // --- Topic Options ---
                 "topicOptions" -> TopicOptionsScreen(
+                    viewModel = viewModel,
                     onSelectShuffle = {
                         shuffledFlashcards = viewModel.flashcards.shuffled(Random(System.currentTimeMillis()))
                         currentShuffleIndex = 0
@@ -182,7 +262,14 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                         currentView = "shuffle"
                     },
                     onSelectList = { currentView = "list" },
-                    onBack = { currentView = "topics" }
+                    onBack = { currentView = "topics" },
+                    onDeleteTopic = {
+                        viewModel.currentTopic?.id?.let { id ->
+                            viewModel.deleteTopic(id) {
+                                currentView = "topics"
+                            }
+                        }
+                    }
                 )
 
                 // --- Shuffle Flashcards ---
@@ -262,7 +349,13 @@ fun AddTopicScreen(onAdd: (String) -> Unit, onCancel: () -> Unit) {
 
 // --- Topic Options ---
 @Composable
-fun TopicOptionsScreen(onSelectShuffle: () -> Unit, onSelectList: () -> Unit, onBack: () -> Unit) {
+fun TopicOptionsScreen(
+    viewModel: FlashcardViewModel,
+    onSelectShuffle: () -> Unit,
+    onSelectList: () -> Unit,
+    onBack: () -> Unit,
+    onDeleteTopic: () -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
@@ -271,6 +364,8 @@ fun TopicOptionsScreen(onSelectShuffle: () -> Unit, onSelectList: () -> Unit, on
         Button(onClick = onSelectList, modifier = Modifier.fillMaxWidth()) { Text("List View") }
         Spacer(Modifier.height(12.dp))
         //Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to Topics") }
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = onDeleteTopic, modifier = Modifier.fillMaxWidth()) { Text("Delete Topic") }
     }
 }
 
@@ -386,7 +481,12 @@ fun AddFlashcardScreen(viewModel: FlashcardViewModel, onDone: () -> Unit, onCanc
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(value = answer, onValueChange = { answer = it }, label = { Text("Answer") }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { viewModel.addFlashcard(question, answer) { onDone() } }, enabled = question.isNotBlank() && answer.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Save Flashcard") }
+
+        Button(
+            onClick = { viewModel.addFlashcard(question, answer) { onDone() } },
+            enabled = question.isNotBlank() && answer.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Save Flashcard") }
         Spacer(Modifier.height(8.dp))
         Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
     }
