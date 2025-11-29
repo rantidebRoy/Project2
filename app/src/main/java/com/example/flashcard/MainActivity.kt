@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -511,6 +512,7 @@ fun FeatureCard(item: CardItem) {
 fun ProfileScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val userId = FirebaseAuth.getInstance().currentUser?.uid
+
     var username by remember { mutableStateOf<String?>(null) }
     var email by remember { mutableStateOf<String?>(null) }
     var id by remember { mutableStateOf<Number?>(null) }
@@ -530,34 +532,82 @@ fun ProfileScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-
-        TopAppBar(
-            title = { Text("User Profile") },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Profile", style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
-            }
-        )
+            )
+        }
+    ) { padding ->
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
+                .padding(padding)
+                .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
+            // --- Profile Icon ---
+            Spacer(Modifier.height(16.dp))
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(110.dp),
+                tonalElevation = 4.dp
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    modifier = Modifier.padding(12.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
             Spacer(Modifier.height(20.dp))
-            Text("Name: ${username ?: "Loading..."}")
-            Spacer(Modifier.height(8.dp))
-            Text("Email: ${email ?: "Loading..."}")
-            Spacer(Modifier.height(8.dp))
-            Text("ID: ${id ?: "Loading..."}")
-            Spacer(Modifier.height(20.dp))
+
+            // --- Profile Card ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(6.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+
+                    ProfileItem(label = "Name", value = username)
+                    ProfileItem(label = "Email", value = email)
+                    ProfileItem(label = "User ID", value = id?.toString())
+                }
+            }
         }
     }
 }
+
+@Composable
+fun ProfileItem(label: String, value: String?) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = value ?: "Loading...",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
 
 // ------------------------------
 // Firebase Registration
