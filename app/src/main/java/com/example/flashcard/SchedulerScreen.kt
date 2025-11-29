@@ -292,21 +292,39 @@ fun AddEventScreen(
         )
         Spacer(Modifier.height(12.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
             Button(
                 onClick = { date = "today" },
                 colors = ButtonDefaults.buttonColors(
-                    if (date == "today") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                    containerColor = if (date == "today")
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (date == "today")
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) { Text("Today") }
 
             Button(
                 onClick = { date = "tomorrow" },
                 colors = ButtonDefaults.buttonColors(
-                    if (date == "tomorrow") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                    containerColor = if (date == "tomorrow")
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (date == "tomorrow")
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) { Text("Tomorrow") }
         }
+
 
         Spacer(Modifier.height(16.dp))
 

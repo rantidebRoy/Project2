@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +23,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -309,10 +312,11 @@ fun SplashScreen(navController: NavController, sessionManager: SessionManager) {
 //     Intro Screen
 // --------------------------
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun IntroScreen(navController: NavController) {
     val pages = onboardingPages
-    var currentPage by remember { mutableStateOf(0) }
+    val pagerState = rememberPagerState { pages.size }
 
     Column(
         modifier = Modifier
@@ -322,19 +326,12 @@ fun IntroScreen(navController: NavController) {
         verticalArrangement = Arrangement.SpaceBetween
     ) {
 
+        // Top bar: app name + Skip
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (currentPage > 0) {
-                TextButton(onClick = { currentPage = currentPage - 1 }) {
-                    Text("Back")
-                }
-            } else {
-                Spacer(modifier = Modifier.width(48.dp))
-            }
-
             Text(
                 text = "Study Buddy",
                 style = MaterialTheme.typography.titleLarge,
@@ -352,25 +349,35 @@ fun IntroScreen(navController: NavController) {
                 Text("Skip")
             }
         }
+        Spacer(modifier = Modifier.height(24.dp))
+        // Swipeable pager with images
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp), // space at left/right
+            pageSpacing = 24.dp                               // gap between pages
+        ) { page ->
+            Image(
+                painter = painterResource(id = pages[page].imageRes),
+                contentDescription = "Intro image ${page + 1}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(9f / 16f)
+                    .clip(RoundedCornerShape(32.dp))
+            )
+        }
 
-        Image(
-            painter = painterResource(id = pages[currentPage].imageRes),
-            contentDescription = "Intro image ${currentPage + 1}",
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(32.dp))
-        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Dots indicator using pagerState.currentPage
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
             pages.forEachIndexed { index, _ ->
-                val isSelected = index == currentPage
+                val isSelected = index == pagerState.currentPage
                 Box(
                     modifier = Modifier
                         .padding(4.dp)
@@ -388,10 +395,12 @@ fun IntroScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        //Bottom button: Next / Get Started
         Button(
             onClick = {
-                if (currentPage < pages.lastIndex) {
-                    currentPage = currentPage + 1
+                if (pagerState.currentPage < pages.lastIndex) {
+                    // scroll to next page
+                    // use coroutine scope outside if you want smooth animateScrollToPage
                 } else {
                     navController.navigate(SIGNUP_ROUTE) {
                         popUpTo(INTRO_ROUTE) { inclusive = true }
@@ -404,7 +413,7 @@ fun IntroScreen(navController: NavController) {
             shape = MaterialTheme.shapes.extraLarge
         ) {
             Text(
-                text = if (currentPage < pages.lastIndex) "Next" else "Get Started",
+                text = if (pagerState.currentPage < pages.lastIndex) "Next" else "Get Started",
                 style = MaterialTheme.typography.titleMedium
             )
         }
@@ -423,10 +432,6 @@ fun IntroScreen(navController: NavController) {
         }
     }
 }
-
-
-
-
 // -------------------------------------------------------------
 // Existing Screens — unchanged except routing updated
 // -------------------------------------------------------------
