@@ -78,6 +78,9 @@ private const val SCHEDULER_ROUTE = "scheduler_screen"
 private const val QNA_ROUTE = "qna_screen"
 const val PUBLISH_QUESTION_ROUTE = "publish_question_screen"
 
+private const val HELP_ROUTE = "help_screen"
+private const val ABOUT_ROUTE = "about_screen"
+
 // --------------------------
 //       MainActivity
 // --------------------------
@@ -87,8 +90,7 @@ class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
-        // Optionally handle the result (e.g., show a toast or settings prompt)
-        // For now we do nothing; notifications will still work on older OS levels.
+        // Optionally handle the result
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +99,6 @@ class MainActivity : ComponentActivity() {
         createNotificationChannel()
 
         // --- START THE MIDNIGHT CYCLE ---
-        // This sets the alarm for the next 12:00 AM to handle scheduler data rotation
         MidnightReceiver.scheduleMidnightAlarm(this)
 
         // Check/Ask for Notification Permission (Android 13+)
@@ -185,14 +186,13 @@ fun AppNavigationWithNotifications() {
                     }
                 },
                 onNavigateToSignup = { navController.navigate(SIGNUP_ROUTE) },
-                onNavigateToReset = { navController.navigate(RESET_PASSWORD_ROUTE) }   // 👈 NEW
+                onNavigateToReset = { navController.navigate(RESET_PASSWORD_ROUTE) }
             )
         }
 
         composable(RESET_PASSWORD_ROUTE) {
             ResetPasswordScreen(onBack = { navController.popBackStack() })
         }
-
 
         composable(SIGNUP_ROUTE) {
             SignupScreen(
@@ -212,7 +212,7 @@ fun AppNavigationWithNotifications() {
             )
         }
 
-        // --- Main App Screen ---
+        // --- Main App Screen --- (pass nav lambdas for new screens too)
         composable(MAIN_ROUTE) {
             MainScreen(
                 onNavigateToTimer = { navController.navigate(TIMER_ROUTE) },
@@ -220,6 +220,8 @@ fun AppNavigationWithNotifications() {
                 onNavigateToProfile = { navController.navigate(PROFILE_ROUTE) },
                 onNavigateToScheduler = { navController.navigate(SCHEDULER_ROUTE) },
                 onNavigateToQnA = { navController.navigate(QNA_ROUTE) },
+                onNavigateToHelp = { navController.navigate(HELP_ROUTE) },
+                onNavigateToAbout = { navController.navigate(ABOUT_ROUTE) },
                 onLogout = {
                     FirebaseAuth.getInstance().signOut()
                     sessionManager.clearSession()
@@ -248,9 +250,7 @@ fun AppNavigationWithNotifications() {
         composable("topicDetail/{topic}") { entry ->
             TopicDetailScreen(navController, entry.arguments?.getString("topic") ?: "")
         }
-//        composable("listView/{topic}") { entry ->
-//            ListViewScreen(navController, entry.arguments?.getString("topic") ?: "")
-//        }
+
         composable("flashcardDetail/{topicId}/{flashcardId}") { entry ->
             FlashcardDetailScreen(
                 navController,
@@ -259,11 +259,15 @@ fun AppNavigationWithNotifications() {
             )
         }
 
-        // --- Profile, Scheduler, QnA ---
+        // --- Profile, Scheduler, QnA, Publish ---
         composable(PROFILE_ROUTE) { ProfileScreen(onBack = { navController.popBackStack() }) }
         composable(SCHEDULER_ROUTE) { SchedulerScreen(onBack = { navController.popBackStack() }) }
         composable(QNA_ROUTE) { QnAScreen(parentNavController = navController) }
         composable(PUBLISH_QUESTION_ROUTE) { PublishQuestionScreen(onBack = { navController.popBackStack() }) }
+
+        // --- Help & About ---
+        composable(HELP_ROUTE) { HelpScreen(onBack = { navController.popBackStack() }) }
+        composable(ABOUT_ROUTE) { AboutScreen(onBack = { navController.popBackStack() }) }
     }
 }
 
@@ -272,10 +276,8 @@ fun AppNavigationWithNotifications() {
 // --------------------------
 @Composable
 fun SplashScreen(navController: NavController, sessionManager: SessionManager) {
-
     LaunchedEffect(Unit) {
         delay(2000)
-
         if (sessionManager.isLoggedIn()) {
             navController.navigate(MAIN_ROUTE) {
                 popUpTo(SPLASH_ROUTE) { inclusive = true }
@@ -337,7 +339,6 @@ fun IntroScreen(navController: NavController) {
                     "• Scheduler: Plan your study sessions.\n" +
                     "• Timer: Focus with Pomodoro-style timers.\n" +
                     "• Q&A: Ask questions and get answers.",
-
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
@@ -345,7 +346,7 @@ fun IntroScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // Sign Up Button (same color as Log In)
+        // Sign Up Button
         Button(
             onClick = { navController.navigate(SIGNUP_ROUTE) },
             modifier = Modifier
@@ -361,7 +362,7 @@ fun IntroScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Log In Button (same color, only pressed effect)
+        // Log In Button
         Button(
             onClick = { navController.navigate(LOGIN_ROUTE) },
             modifier = Modifier
@@ -380,12 +381,9 @@ fun IntroScreen(navController: NavController) {
 }
 
 
-
 // -------------------------------------------------------------
 // Existing Screens — unchanged except routing updated
 // -------------------------------------------------------------
-// ---------------- MAIN SCREEN ----------------
-
 // ---------------- MAIN SCREEN ----------------
 
 @Composable
@@ -395,20 +393,25 @@ fun MainScreen(
     onNavigateToProfile: () -> Unit,
     onNavigateToScheduler: () -> Unit,
     onNavigateToQnA: () -> Unit,
+    onNavigateToHelp: () -> Unit,
+    onNavigateToAbout: () -> Unit,
     onLogout: () -> Unit
 ) {
+    // Added Help and About cards
     val cardItems = listOf(
         CardItem("Profile", Icons.Default.Person, onNavigateToProfile),
         CardItem("Timer", Icons.Default.Timer, onNavigateToTimer),
         CardItem("Flashcards", Icons.Default.MenuBook, onNavigateToFlashcard),
         CardItem("Scheduler", Icons.Default.CalendarToday, onNavigateToScheduler),
-        CardItem("Q&A", Icons.Default.QuestionAnswer, onNavigateToQnA)
+        CardItem("Q&A", Icons.Default.QuestionAnswer, onNavigateToQnA),
+        CardItem("Help", Icons.Default.Help, onNavigateToHelp),
+        CardItem("About", Icons.Default.Info, onNavigateToAbout)
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)   // ← WHITE BACKGROUND
+            .background(Color.White)
             .padding(20.dp)
     ) {
         // Top Title
@@ -445,7 +448,6 @@ fun MainScreen(
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary
             ),
-
             shape = RoundedCornerShape(20.dp)
         ) {
             Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.White)
@@ -475,7 +477,7 @@ fun FeatureCard(item: CardItem) {
             .fillMaxWidth()
             .clickable { item.onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primary   // ← THEME COLOR FOR CARDS
+            containerColor = MaterialTheme.colorScheme.primary
         ),
         shape = RoundedCornerShape(28.dp),
         elevation = CardDefaults.cardElevation(6.dp)
@@ -502,6 +504,7 @@ fun FeatureCard(item: CardItem) {
 }
 
 
+// ---------------- Profile Screen ----------------
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -539,7 +542,10 @@ fun ProfileScreen(onBack: () -> Unit) {
         )
 
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(20.dp))
@@ -552,6 +558,7 @@ fun ProfileScreen(onBack: () -> Unit) {
         }
     }
 }
+
 // ------------------------------
 // Firebase Registration
 // ------------------------------
@@ -643,6 +650,154 @@ fun startNotificationChecker(context: Context) {
             }
 
             delay(60000)
+        }
+    }
+}
+
+// ------------------------------
+// Help Screen
+// ------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HelpScreen(onBack: () -> Unit) {
+    val scroll = rememberScrollState()
+
+    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        TopAppBar(
+            title = { Text("Help - How to use Study Buddy") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(scroll)
+        ) {
+            Text("Overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Study Buddy is built to help you memorize and focus. Below are the app's features and how to use them.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Spacer(Modifier.height(16.dp))
+            Text("1) Flashcards", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• Open Flashcards from the Home screen.\n" +
+                        "• You will see a random card (question). Tap 'Show Answer' to reveal it.\n" +
+                        "• 'Next Card' picks another random question.\n" +
+                        "• 'Add New Card' lets you create a new question-answer pair. Note: currently saved in-memory; to persist across restarts we will connect a database (Room/Firebase) later."
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Text("2) Timer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• Set minutes and seconds, then tap 'Start'.\n" +
+                        "• Use Pause to pause the countdown and Resume to continue.\n" +
+                        "• Use Restart to set a new time.\n" +
+                        "• The timer continues in the background when you navigate away — return to see the current state."
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Text("3) Scheduler", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• Scheduler lets you save events for the next day with a title, description, hour & minute.\n" +
+                        "• When the scheduled time arrives, the app shows a notification.\n" +
+                        "• Planned improvements: persist events using Room and schedule notifications with AlarmManager/WorkManager."
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Text("4) Q&A", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• Q&A allows users to post questions and answer others' questions.\n" +
+                        "• Use the 'Publish Question' option to add a new question.\n" +
+                        "• Future work: backend (MongoDB) integration so questions and answers are stored remotely."
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Text("5) Profile & Authentication", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• Sign Up and Login handled with Firebase Authentication.\n" +
+                        "• Profile page shows name, email and user ID fetched from Firestore.\n" +
+                        "• If you sign up, the app assigns you an incremental ID stored in Firestore 'users' collection."
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Text("6) Notifications & Permissions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• The app asks for notification permission on Android 13+.\n" +
+                        "• Scheduler notifications are sent via NotificationManager.\n" +
+                        "• If notifications aren't showing, check system-level app notification settings and ensure permission is granted."
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Text("Tips & Troubleshooting", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "• If a feature isn't available or data doesn't persist, check if you're logged in and if Firestore connectivity is configured.\n" +
+                        "• For persistent flashcards/events we will add Room or Firebase storage in the next milestone.\n" +
+                        "• If notifications fail, verify channel creation (Android O+) and notification permission on Android 13+."
+            )
+
+            Spacer(Modifier.height(24.dp))
+            Text("Need more help?", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Contact the dev team or open an issue in the project repo for bug reports and feature requests.")
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+// ------------------------------
+// About Screen (includes names and ~250 word project description)
+// ------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AboutScreen(onBack: () -> Unit) {
+    val scroll = rememberScrollState()
+
+    // ~250-word project description (approx.)
+    val projectDescription = """
+        Study Buddy is a lightweight learning application developed using Kotlin and Jetpack Compose with the goal of helping students memorize material and maintain focused study sessions. 
+        The app features a flashcards module that presents questions and answers for active recall practice, a timer module that provides Pomodoro-style focus sessions with pause/resume and background ticking, a scheduler that enables users to schedule short study reminders and receive notifications, and a Q&A module for community driven questions and answers. The current implementation uses Firebase Authentication and Firestore for user sign-up and profile management; however, certain features (like local flashcard persistence) are intentionally kept in-memory for the initial prototype and will be upgraded in later milestones to use Room or a remote database. The design follows MVVM principles to separate UI from business logic, leverages Material Design 3 for a modern aesthetic, and is structured to allow incremental improvements such as persistent storage for flashcards, a repetitive focus/break timer cycle, and richer Q&A backend integration. This project is a collaborative effort intended for learning and a demonstration of modern Android practices, focused on clean Compose UI, coroutine-based background tasks, and Firebase integration.
+    """.trimIndent()
+
+    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        TopAppBar(
+            title = { Text("About Us") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(scroll)
+        ) {
+            Text("Team Members", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text("• 2022331023 - Rantideb Roy")
+            Text("• 2022331057 - Banasree Pramanik")
+            Text("• 2022331059 - Supto Das")
+            Spacer(Modifier.height(16.dp))
+
+            Text("Project", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(projectDescription, style = MaterialTheme.typography.bodyMedium)
+
+            Spacer(Modifier.height(24.dp))
+            Text("Contact & Repo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text("Repository: https://github.com/rantidebRoy/Project2")
+            Spacer(Modifier.height(12.dp))
+            Text("This project is a progress-stage prototype — see project milestones for upcoming features like Room persistence, repetitive timers, and a full Q&A backend.")
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
