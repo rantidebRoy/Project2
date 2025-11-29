@@ -312,6 +312,7 @@ fun SplashScreen(navController: NavController, sessionManager: SessionManager) {
 //     Intro Screen
 // --------------------------
 private val onboardingPages = listOf(
+    OnboardingPage(R.drawable.welcome),
     OnboardingPage(R.drawable.flashcards),
     OnboardingPage(R.drawable.timer),
     OnboardingPage(R.drawable.scheduler),
