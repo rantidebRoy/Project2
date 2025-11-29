@@ -100,11 +100,14 @@ class FlashcardViewModel : ViewModel() {
                         loadTopics()
                         onDone()
                     }
+                    .addOnFailureListener {
+                        // optionally handle failure
+                    }
             }.addOnFailureListener {
-                // optionally handle failure (network, permissions)
+                // optionally handle failure (topics read)
             }
         }.addOnFailureListener {
-            // optionally handle failure (user doc missing / network)
+            // optionally handle failure (user doc read)
         }
     }
 
@@ -191,9 +194,94 @@ class FlashcardViewModel : ViewModel() {
                     }
             }
     }
+
+    /**
+     * Share the currently selected topic (and its flashcards) to global_flashcards/{topicId}
+     * Document ID under global_flashcards will be topic.id (incremental id).
+     */
+    fun shareTopic(onDone: () -> Unit, onFailure: (Exception) -> Unit = {}) {
+        val uid = auth.currentUser?.uid ?: return
+        val topic = currentTopic ?: return
+
+        val userTopicsRef = db.collection("users").document(uid).collection("topics")
+
+        // Find the Firestore topic doc that matches this topic by its "id" field
+        userTopicsRef.whereEqualTo("id", topic.id).get()
+            .addOnSuccessListener { topicDocs ->
+                val topicDoc = topicDocs.documents.firstOrNull()
+                if (topicDoc == null) {
+                    onDone()
+                    return@addOnSuccessListener
+                }
+
+                // Reference in global collection
+                val globalRef = db.collection("global_flashcards").document(topic.id)
+
+                // Step 1 → Delete previous topic & its flashcards IF they exist
+                globalRef.collection("flashcards").get()
+                    .addOnSuccessListener { oldFlashcards ->
+                        val batchDelete = db.batch()
+
+                        // delete all old flashcards
+                        for (doc in oldFlashcards.documents) {
+                            batchDelete.delete(doc.reference)
+                        }
+
+                        // delete old main topic document
+                        batchDelete.delete(globalRef)
+
+                        batchDelete.commit()
+                            .addOnSuccessListener {
+
+                                // Now copy fresh content
+                                topicDoc.reference.collection("flashcards")
+                                    .get()
+                                    .addOnSuccessListener { newFlashcards ->
+
+                                        val newTopicData = mapOf(
+                                            "id" to topic.id,
+                                            "name" to topic.name,
+                                            "sharedBy" to uid,
+                                            "timestamp" to System.currentTimeMillis()
+                                        )
+
+                                        // write new topic
+                                        globalRef.set(newTopicData)
+                                            .addOnSuccessListener {
+
+                                                // write new flashcards
+                                                val batchAdd = db.batch()
+
+                                                for (fDoc in newFlashcards.documents) {
+                                                    val data = mapOf(
+                                                        "question" to (fDoc.get("question")?.toString() ?: ""),
+                                                        "answer" to (fDoc.get("answer")?.toString() ?: "")
+                                                    )
+                                                    val newFlashRef = globalRef.collection("flashcards").document()
+                                                    batchAdd.set(newFlashRef, data)
+                                                }
+
+                                                batchAdd.commit()
+                                                    .addOnSuccessListener { onDone() }
+                                                    .addOnFailureListener { e -> onFailure(e) }
+                                            }
+                                            .addOnFailureListener { e -> onFailure(e) }
+                                    }
+                                    .addOnFailureListener { e -> onFailure(e) }
+                            }
+                            .addOnFailureListener { e -> onFailure(e) }
+                    }
+                    .addOnFailureListener { e -> onFailure(e) }
+            }
+            .addOnFailureListener { e -> onFailure(e) }
+    }
+
 }
 
-// --- FlashcardScreen Composable ---
+// ----------------------------------------------------------------------------------
+// UI BELOW HERE — unchanged code except reading topic.id from field and adding Share button
+// ----------------------------------------------------------------------------------
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
@@ -256,13 +344,21 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                 "topicOptions" -> TopicOptionsScreen(
                     viewModel = viewModel,
                     onSelectShuffle = {
-                        shuffledFlashcards = viewModel.flashcards.shuffled(Random(System.currentTimeMillis()))
+                        shuffledFlashcards =
+                            viewModel.flashcards.shuffled(Random(System.currentTimeMillis()))
                         currentShuffleIndex = 0
                         showAnswer = false
                         currentView = "shuffle"
                     },
                     onSelectList = { currentView = "list" },
                     onBack = { currentView = "topics" },
+                    onShareTopic = {
+                        // call shareTopic and then go back to topics (or show snackbar)
+                        viewModel.shareTopic(
+                            onDone = { currentView = "topics" },
+                            onFailure = { /* optionally show error */ }
+                        )
+                    },
                     onDeleteTopic = {
                         viewModel.currentTopic?.id?.let { id ->
                             viewModel.deleteTopic(id) {
@@ -354,18 +450,27 @@ fun TopicOptionsScreen(
     onSelectShuffle: () -> Unit,
     onSelectList: () -> Unit,
     onBack: () -> Unit,
+    onShareTopic: () -> Unit,
     onDeleteTopic: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
-        Button(onClick = onSelectShuffle, modifier = Modifier.fillMaxWidth()) { Text("Shuffle All") }
+        Button(onClick = onSelectShuffle, modifier = Modifier.fillMaxWidth()) {
+            Text("Shuffle All")
+        }
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onSelectList, modifier = Modifier.fillMaxWidth()) { Text("List View") }
+        Button(onClick = onSelectList, modifier = Modifier.fillMaxWidth()) {
+            Text("List View")
+        }
         Spacer(Modifier.height(12.dp))
-        //Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to Topics") }
+        Button(onClick = onShareTopic, modifier = Modifier.fillMaxWidth()) {
+            Text("Share Topic")
+        }
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onDeleteTopic, modifier = Modifier.fillMaxWidth()) { Text("Delete Topic") }
+        Button(onClick = onDeleteTopic, modifier = Modifier.fillMaxWidth()) {
+            Text("Delete Topic")
+        }
     }
 }
 
@@ -403,38 +508,26 @@ fun FlashcardListWithDeleteScreen(
     onAddFlashcard: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
+        modifier = Modifier.fillMaxSize().padding(24.dp)
     ) {
         Text(
             "Flashcards in ${viewModel.currentTopic?.name}",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
-
         Spacer(Modifier.height(16.dp))
 
-        LazyColumn(
-            modifier = Modifier.weight(1f)
-        ) {
+        LazyColumn(modifier = Modifier.weight(1f)) {
             items(viewModel.flashcards) { card ->
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
 
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
                     ) {
-
-                        Column(
-                            modifier = Modifier.align(Alignment.CenterStart)
-                        ) {
+                        Column(modifier = Modifier.align(Alignment.CenterStart)) {
                             Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
                             Text("A: ${card.answer}")
                         }
@@ -456,10 +549,7 @@ fun FlashcardListWithDeleteScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        Button(
-            onClick = onAddFlashcard,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Button(onClick = onAddFlashcard, modifier = Modifier.fillMaxWidth()) {
             Text("Add New Flashcard")
         }
 
@@ -486,7 +576,9 @@ fun AddFlashcardScreen(viewModel: FlashcardViewModel, onDone: () -> Unit, onCanc
             onClick = { viewModel.addFlashcard(question, answer) { onDone() } },
             enabled = question.isNotBlank() && answer.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Save Flashcard") }
+        ) {
+            Text("Save Flashcard")
+        }
         Spacer(Modifier.height(8.dp))
         Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
     }
