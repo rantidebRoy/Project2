@@ -207,7 +207,8 @@ class FlashcardViewModel : ViewModel() {
     /**
      * Share current topic into global_flashcards/{topic.id} and create/update a root topic_tag entry.
      * If global topic existed, delete it first (old doc + its flashcards).
-     * Also save topic name under root collection "topic_tag" (doc id = topic.id) with fields { name, topicId }.
+     * Also save topic name under root collection "topic_tag" (only "name", no topicId).
+     * Do not add duplicate topic_tag entries with same name.
      */
     fun shareTopic(onDone: () -> Unit, onFailure: (Exception) -> Unit = {}) {
         val uid = auth.currentUser?.uid ?: return
@@ -266,13 +267,24 @@ class FlashcardViewModel : ViewModel() {
                                                 batchAdd.commit()
                                                     .addOnSuccessListener {
                                                         // Also write to root-level topic_tag collection (so importer can search)
+                                                        // Only store "name" and avoid duplicates
                                                         val tagData = mapOf(
-                                                            "name" to topic.name,
-                                                            "topicId" to topic.id
+                                                            "name" to topic.name
                                                         )
-                                                        db.collection("topic_tag").document(topic.id)
-                                                            .set(tagData)
-                                                            .addOnSuccessListener { onDone() }
+                                                        db.collection("topic_tag")
+                                                            .whereEqualTo("name", topic.name)
+                                                            .get()
+                                                            .addOnSuccessListener { existing ->
+                                                                if (existing.isEmpty) {
+                                                                    db.collection("topic_tag").document()
+                                                                        .set(tagData)
+                                                                        .addOnSuccessListener { onDone() }
+                                                                        .addOnFailureListener { e -> onFailure(e) }
+                                                                } else {
+                                                                    // already exists -> done
+                                                                    onDone()
+                                                                }
+                                                            }
                                                             .addOnFailureListener { e -> onFailure(e) }
                                                     }
                                                     .addOnFailureListener { e -> onFailure(e) }
@@ -290,13 +302,11 @@ class FlashcardViewModel : ViewModel() {
 
     // ---------- Importing logic ----------
     /**
-     * Import a global topic (topicId) into the current user's topics.
+     * Import a global topic (globalTopicId) into the current user's topics.
      * This will:
-     *  - Read the global topic doc and its flashcards from global_flashcards/{topicId}
+     *  - Read the global topic doc and its flashcards from global_flashcards/{globalTopicId}
      *  - Create a new topic in users/{uid}/topics with a NEW incremental id (based on user's stored id field)
      *  - Copy flashcards into that topic's flashcards subcollection
-     *
-     * Note: Per your instruction "B" (remove global ID completely), we do NOT store sourceId; only the new incremental id is saved.
      */
     fun importGlobalTopicIntoUser(globalTopicId: String, onDone: () -> Unit, onFailure: (Exception) -> Unit = {}) {
         val uid = auth.currentUser?.uid ?: return
@@ -337,7 +347,6 @@ class FlashcardViewModel : ViewModel() {
                             topicsRef.document().set(topicData)
                                 .addOnSuccessListener { topicWriteRes ->
                                     // find the newly created topic doc reference to attach flashcards
-                                    // we need to query for doc with field id == newTopicId
                                     topicsRef.whereEqualTo("id", newTopicId).get()
                                         .addOnSuccessListener { newTopicDocs ->
                                             val newTopicDoc = newTopicDocs.documents.firstOrNull()
@@ -376,6 +385,8 @@ class FlashcardViewModel : ViewModel() {
 //  - reading topic.id from field
 //  - adding Share button
 //  - adding Import Topics screen and navigation to it
+//  - import search adjusted to topic_tag (name only) and resolving global docs
+//  - delete-from-global option for own shared topics
 // ----------------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -548,32 +559,31 @@ fun TopicListScreen(
 @Composable
 fun ImportTopicsScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
     var query by remember { mutableStateOf("") }
-    var suggestions by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) } // Pair(name, topicId)
-    var results by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) } // just names
+    var results by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) } // Pair(name, globalDocId)
     var loading by remember { mutableStateOf(false) }
     val db = FirebaseFirestore.getInstance()
+    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
 
-    // realtime prefix search for suggestions (max 3)
+    // realtime prefix search for suggestions (max 3) — search topic_tag.name
     LaunchedEffect(query) {
         if (query.isBlank()) {
             suggestions = emptyList()
             return@LaunchedEffect
         }
-        // prefix search using range queries
         val start = query
         val end = query + '\uf8ff'
         db.collection("topic_tag")
             .whereGreaterThanOrEqualTo("name", start)
             .whereLessThanOrEqualTo("name", end)
-            .limit(10) // read a few, we'll show up to 3
+            .limit(10)
             .get()
             .addOnSuccessListener { snap ->
-                val list = snap.documents.mapNotNull { d ->
-                    val name = d.get("name")?.toString()
-                    val tid = d.get("topicId")?.toString()
-                    if (name != null && tid != null) Pair(name, tid) else null
-                }
-                suggestions = list.take(3)
+                val list = snap.documents.mapNotNull { it.get("name")?.toString() }
+                suggestions = list.distinct().take(3)
+            }
+            .addOnFailureListener {
+                suggestions = emptyList()
             }
     }
 
@@ -593,7 +603,7 @@ fun ImportTopicsScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Card(modifier = Modifier.fillMaxWidth().heightIn(max = (48.dp * suggestions.size))) {
                 LazyColumn {
-                    items(suggestions) { (name, tid) ->
+                    items(suggestions) { name ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -621,18 +631,50 @@ fun ImportTopicsScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
             loading = true
             val start = query
             val end = query + '\uf8ff'
+            // Step 1: get matching names from topic_tag
             db.collection("topic_tag")
                 .whereGreaterThanOrEqualTo("name", start)
                 .whereLessThanOrEqualTo("name", end)
                 .get()
                 .addOnSuccessListener { snap ->
-                    val list = snap.documents.mapNotNull { d ->
-                        val name = d.get("name")?.toString()
-                        val tid = d.get("topicId")?.toString()
-                        if (name != null && tid != null) Pair(name, tid) else null
+                    val names = snap.documents.mapNotNull { it.get("name")?.toString() }.distinct()
+                    if (names.isEmpty()) {
+                        results = emptyList()
+                        loading = false
+                        return@addOnSuccessListener
                     }
-                    results = list
-                    loading = false
+
+                    // Step 2: find global_flashcards docs that have name in these names
+                    // Firestore 'whereIn' supports up to 10 items; chunk if necessary
+                    val chunks = names.chunked(10)
+                    val tmpResults = mutableListOf<Pair<String, String>>()
+
+                    var processedChunks = 0
+                    for (chunk in chunks) {
+                        db.collection("global_flashcards")
+                            .whereIn("name", chunk)
+                            .get()
+                            .addOnSuccessListener { gSnap ->
+                                for (gDoc in gSnap.documents) {
+                                    val gname = gDoc.get("name")?.toString() ?: ""
+                                    val gid = gDoc.id
+                                    tmpResults.add(Pair(gname, gid))
+                                }
+                                processedChunks++
+                                if (processedChunks == chunks.size) {
+                                    // All chunks processed
+                                    results = tmpResults
+                                    loading = false
+                                }
+                            }
+                            .addOnFailureListener {
+                                processedChunks++
+                                if (processedChunks == chunks.size) {
+                                    results = tmpResults
+                                    loading = false
+                                }
+                            }
+                    }
                 }
                 .addOnFailureListener {
                     results = emptyList()
@@ -649,13 +691,20 @@ fun ImportTopicsScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
 
         // Results list (scrollable)
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(results) { (name, tid) ->
-                // For each result, we need to fetch flashcard count from global_flashcards/{tid}/flashcards
+            items(results) { (name, gid) ->
+                // For each result, fetch flashcard count and sharedBy
                 var count by remember { mutableStateOf<Int?>(null) }
-                LaunchedEffect(tid) {
-                    db.collection("global_flashcards").document(tid)
-                        .collection("flashcards")
-                        .get()
+                var sharedBy by remember { mutableStateOf<String?>(null) }
+                LaunchedEffect(gid) {
+                    val docRef = db.collection("global_flashcards").document(gid)
+                    docRef.get()
+                        .addOnSuccessListener { doc ->
+                            sharedBy = doc.get("sharedBy")?.toString()
+                        }
+                        .addOnFailureListener {
+                            sharedBy = null
+                        }
+                    docRef.collection("flashcards").get()
                         .addOnSuccessListener { fSnap ->
                             count = fSnap.size()
                         }
@@ -672,20 +721,44 @@ fun ImportTopicsScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(name, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(4.dp))
-                            Text("ID: $tid", fontSize = 12.sp)
+                            Text("ID: $gid", fontSize = 12.sp)
                             Spacer(Modifier.height(4.dp))
                             Text("Flashcards: ${count ?: "..."}", fontSize = 12.sp)
                         }
 
-                        IconButton(onClick = {
-                            // Import: copy global topic + flashcards into user's collection with new incremental id
-                            viewModel.importGlobalTopicIntoUser(tid, onDone = {
-                                // Optionally show a message — for now we do nothing
-                            }, onFailure = {
-                                // Optionally show error
-                            })
-                        }) {
-                            Icon(Icons.Default.Add, contentDescription = "Import")
+                        // If this topic was shared by the current user, show delete icon to remove from global
+                        if (sharedBy != null && sharedBy == currentUid) {
+                            IconButton(onClick = {
+                                // Delete global topic and all its flashcards
+                                val ref = db.collection("global_flashcards").document(gid)
+                                ref.collection("flashcards").get()
+                                    .addOnSuccessListener { fs ->
+                                        val batch = db.batch()
+                                        for (fd in fs.documents) {
+                                            batch.delete(fd.reference)
+                                        }
+                                        batch.delete(ref)
+                                        batch.commit()
+                                            .addOnSuccessListener {
+                                                // refresh results after deletion
+                                                // remove this item from results locally
+                                                // (caller can re-run search to refresh)
+                                            }
+                                    }
+                            }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete global topic")
+                            }
+                        } else {
+                            IconButton(onClick = {
+                                // Import: copy global topic + flashcards into user's collection with new incremental id
+                                viewModel.importGlobalTopicIntoUser(gid, onDone = {
+                                    // optionally refresh user's topics
+                                }, onFailure = {
+                                    // optionally show error
+                                })
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = "Import")
+                            }
                         }
                     }
                 }
