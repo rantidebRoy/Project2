@@ -56,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
@@ -321,12 +322,19 @@ fun IntroScreen(navController: NavController) {
         verticalArrangement = Arrangement.SpaceBetween
     ) {
 
-        // Top bar: app name + Skip
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (currentPage > 0) {
+                TextButton(onClick = { currentPage = currentPage - 1 }) {
+                    Text("Back")
+                }
+            } else {
+                Spacer(modifier = Modifier.width(48.dp))
+            }
+
             Text(
                 text = "Study Buddy",
                 style = MaterialTheme.typography.titleLarge,
@@ -336,7 +344,6 @@ fun IntroScreen(navController: NavController) {
 
             TextButton(
                 onClick = {
-                    // Go directly to Sign Up / Login page
                     navController.navigate(SIGNUP_ROUTE) {
                         popUpTo(INTRO_ROUTE) { inclusive = true }
                     }
@@ -346,18 +353,17 @@ fun IntroScreen(navController: NavController) {
             }
         }
 
-        // Center: current image
         Image(
             painter = painterResource(id = pages[currentPage].imageRes),
             contentDescription = "Intro image ${currentPage + 1}",
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .aspectRatio(9f / 16f)
+                .clip(RoundedCornerShape(32.dp))
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Dots indicator (optional but nice)
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -382,13 +388,11 @@ fun IntroScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Bottom buttons: Next / Get Started
         Button(
             onClick = {
                 if (currentPage < pages.lastIndex) {
-                    currentPage += 1
+                    currentPage = currentPage + 1
                 } else {
-                    // Last page -> go to Sign Up / Login screen
                     navController.navigate(SIGNUP_ROUTE) {
                         popUpTo(INTRO_ROUTE) { inclusive = true }
                     }
@@ -407,7 +411,6 @@ fun IntroScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Optional: small text button to go to Login directly
         TextButton(
             onClick = {
                 navController.navigate(LOGIN_ROUTE) {
@@ -420,6 +423,7 @@ fun IntroScreen(navController: NavController) {
         }
     }
 }
+
 
 
 
