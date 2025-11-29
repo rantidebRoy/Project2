@@ -311,7 +311,12 @@ fun SplashScreen(navController: NavController, sessionManager: SessionManager) {
 // --------------------------
 //     Intro Screen
 // --------------------------
-
+private val onboardingPages = listOf(
+    OnboardingPage(R.drawable.flashcards),
+    OnboardingPage(R.drawable.timer),
+    OnboardingPage(R.drawable.scheduler),
+    OnboardingPage(R.drawable.qna)
+)
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun IntroScreen(navController: NavController) {
@@ -520,14 +525,6 @@ data class CardItem(
 data class OnboardingPage(
     val imageRes: Int
 )
-private val onboardingPages = listOf(
-    OnboardingPage(R.drawable.flashcards),
-    OnboardingPage(R.drawable.timer),
-    OnboardingPage(R.drawable.scheduler),
-    OnboardingPage(R.drawable.qna)
-)
-
-
 
 // ---------------- CARD UI ----------------
 
@@ -773,12 +770,24 @@ fun startNotificationChecker(context: Context) {
 fun HelpScreen(onBack: () -> Unit) {
     val scroll = rememberScrollState()
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        TopAppBar(
-            title = { Text("Help - How to use Study Buddy") },
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        CenterAlignedTopAppBar(
+            title = {
+                Text(
+                    "How to use Study Buddy",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
                 }
             }
         )
@@ -786,81 +795,81 @@ fun HelpScreen(onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
                 .verticalScroll(scroll)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Study Buddy is built to help you memorize and focus. Below are the app's features and how to use them.",
-                style = MaterialTheme.typography.bodyMedium
+
+            HelpFeatureCard(
+                title = "Flashcards",
+                description =
+                    "• Open Flashcards from the Home screen.\n" +
+                            "• Add new topic.\n" +
+                            "• Add new flashcard to a topic.\n" +
+                            "• Share your topics and import others.\n" +
+                            "• Use Shuffle All to test yourself.\n" +
+                            "• Use List View to show all the flashcards, you can also delete from this list."
+                            //"• 'Next Card' picks another random question."
+                            //"• 'Add New Card' lets you add a new question-answer pair."
             )
 
-            Spacer(Modifier.height(16.dp))
-            Text("1) Flashcards", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• Open Flashcards from the Home screen.\n" +
-                        "• You will see a random card (question). Tap 'Show Answer' to reveal it.\n" +
-                        "• 'Next Card' picks another random question.\n" +
-                        "• 'Add New Card' lets you create a new question-answer pair. Note: currently saved in-memory; to persist across restarts we will connect a database (Room/Firebase) later."
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("2) Timer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• Set minutes and seconds, then tap 'Start'.\n" +
-                        "• Use Pause to pause the countdown and Resume to continue.\n" +
-                        "• Use Restart to set a new time.\n" +
-                        "• The timer continues in the background when you navigate away — return to see the current state."
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("3) Scheduler", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• Scheduler lets you save events for the next day with a title, description, hour & minute.\n" +
-                        "• When the scheduled time arrives, the app shows a notification.\n" +
-                        "• Planned improvements: persist events using Room and schedule notifications with AlarmManager/WorkManager."
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("4) Q&A", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• Q&A allows users to post questions and answer others' questions.\n" +
-                        "• Use the 'Publish Question' option to add a new question.\n" +
-                        "• Future work: backend (MongoDB) integration so questions and answers are stored remotely."
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("5) Profile & Authentication", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• Sign Up and Login handled with Firebase Authentication.\n" +
-                        "• Profile page shows name, email and user ID fetched from Firestore.\n" +
-                        "• If you sign up, the app assigns you an incremental ID stored in Firestore 'users' collection."
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("6) Notifications & Permissions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• The app asks for notification permission on Android 13+.\n" +
-                        "• Scheduler notifications are sent via NotificationManager.\n" +
-                        "• If notifications aren't showing, check system-level app notification settings and ensure permission is granted."
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("Tips & Troubleshooting", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                "• If a feature isn't available or data doesn't persist, check if you're logged in and if Firestore connectivity is configured.\n" +
-                        "• For persistent flashcards/events we will add Room or Firebase storage in the next milestone.\n" +
-                        "• If notifications fail, verify channel creation (Android O+) and notification permission on Android 13+."
+            HelpFeatureCard(
+                title = "Timer",
+                description =
+                    "• Set minutes and seconds, then tap 'Start'.\n" +
+                            "• Use Pause / Resume to control the countdown.\n" +
+                            "• Use Restart to set a new time.\n" +
+                            "• The timer continues in the background."
             )
 
-            Spacer(Modifier.height(24.dp))
-            Text("Need more help?", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text("Contact the dev team or open an issue in the project repo for bug reports and feature requests.")
-            Spacer(Modifier.height(24.dp))
+            HelpFeatureCard(
+                title = "Scheduler",
+                description =
+                    "• Save events with title, description, hour and minute.\n" +
+                            "• The app shows a notification at the scheduled time.\n" +
+                            "• Future versions will persist events with Room/WorkManager."
+            )
+
+            HelpFeatureCard(
+                title = "Q&A",
+                description =
+                    "• Post questions and read others' questions.\n" +
+                            "• Use 'Publish Question' to add a new one.\n" +
+                            "• Future versions will store data in a backend (MongoDB)."
+            )
         }
     }
 }
+
+@Composable
+private fun HelpFeatureCard(title: String, description: String) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
 
 // ------------------------------
 // About Screen (includes names and ~250 word project description)

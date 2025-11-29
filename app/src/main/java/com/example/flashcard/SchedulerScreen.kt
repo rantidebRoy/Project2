@@ -5,10 +5,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -32,44 +38,71 @@ fun SchedulerScreen(onBack: () -> Unit) {
 
     when (currentView) {
 
-        // --- Main Menu ---
+        // --- Main Menu styled like MainScreen ---
         "main" -> {
+            val schedulerCards = listOf(
+                CardItem(
+                    title = "Today's\nSchedule",
+                    icon = Icons.Default.CalendarToday,
+                    onClick = {
+                        dateFilter = "today"
+                        currentView = "today"
+                    }
+                ),
+                CardItem(
+                    title = "Tomorrow's\nSchedule",
+                    icon = Icons.Default.CalendarToday,
+                    onClick = {
+                        dateFilter = "tomorrow"
+                        currentView = "tomorrow"
+                    }
+                ),
+                CardItem(
+                    title = "Add Event",
+                    icon = Icons.Default.Add,
+                    onClick = { currentView = "add" }
+                )
+            )
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.White)
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(20.dp)
             ) {
                 TopAppBar(
-                    title = { Text("Scheduler") },
+                    title = {
+                        Text(
+                            text = "Scheduler",
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
                         }
                     }
                 )
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                Button(onClick = {
-                    dateFilter = "today"
-                    currentView = "today"
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Today's Schedule")
-                }
-                Spacer(Modifier.height(12.dp))
-
-                Button(onClick = {
-                    dateFilter = "tomorrow"
-                    currentView = "tomorrow"
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Tomorrow's Schedule")
-                }
-                Spacer(Modifier.height(12.dp))
-
-                Button(onClick = { currentView = "add" }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Add Event")
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(schedulerCards.size) { index ->
+                        FeatureCard(schedulerCards[index])
+                    }
                 }
             }
         }
@@ -93,7 +126,6 @@ fun SchedulerScreen(onBack: () -> Unit) {
                         .addOnSuccessListener {
                             Toast.makeText(context, "Event saved!", Toast.LENGTH_SHORT).show()
 
-                            // >>> FIX: Schedule the system notification immediately <<<
                             NotificationScheduler.scheduleEvent(
                                 context = context,
                                 title = title,
@@ -102,7 +134,6 @@ fun SchedulerScreen(onBack: () -> Unit) {
                                 hour = hour,
                                 minute = minute
                             )
-                            // >>> END FIX <<<
 
                             currentView = "main"
                         }
@@ -147,11 +178,16 @@ fun SchedulerScreen(onBack: () -> Unit) {
             ) {
                 TopAppBar(
                     title = {
-                        Text(if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule")
+                        Text(
+                            if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule"
+                        )
                     },
                     navigationIcon = {
                         IconButton(onClick = { currentView = "main" }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
                         }
                     }
                 )
@@ -171,10 +207,21 @@ fun SchedulerScreen(onBack: () -> Unit) {
                                     .clickable {
                                         selectedEvent = event
                                         currentView = "details"
-                                    }
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(2.dp)
                             ) {
-                                Box(Modifier.padding(16.dp)) {
-                                    Text(event["title"] as? String ?: "")
+                                Column(
+                                    modifier = Modifier.padding(16.dp)
+                                ) {
+                                    Text(
+                                        text = event["title"] as? String ?: "",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
@@ -201,7 +248,10 @@ fun SchedulerScreen(onBack: () -> Unit) {
                             IconButton(onClick = {
                                 currentView = if (dateFilter == "today") "today" else "tomorrow"
                             }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back"
+                                )
                             }
                         },
                         actions = {
@@ -213,20 +263,31 @@ fun SchedulerScreen(onBack: () -> Unit) {
                                         .document(docId)
                                         .delete()
                                         .addOnSuccessListener {
-                                            Toast.makeText(context, "Event deleted", Toast.LENGTH_SHORT).show()
-                                            currentView = if (dateFilter == "today") "today" else "tomorrow"
+                                            Toast.makeText(
+                                                context,
+                                                "Event deleted",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            currentView =
+                                                if (dateFilter == "today") "today" else "tomorrow"
                                         }
                                         .addOnFailureListener { e ->
-                                            Toast.makeText(context, "Delete failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                "Delete failed: ${e.message}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                 }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete Event")
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete Event"
+                                    )
                                 }
                             }
                         }
                     )
 
-                    // Scrollable content
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -235,16 +296,24 @@ fun SchedulerScreen(onBack: () -> Unit) {
                         horizontalAlignment = Alignment.Start
                     ) {
                         Spacer(Modifier.height(16.dp))
-                        Text("Title: ${event["title"]}", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Title: ${event["title"]}",
+                            style = MaterialTheme.typography.titleLarge
+                        )
                         Spacer(Modifier.height(12.dp))
-                        Text("Description: ${event["description"]}", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Description: ${event["description"]}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                         Spacer(Modifier.height(12.dp))
-                        Text("Time: $timeStr", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Time: $timeStr",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
         }
-
     }
 }
 
@@ -262,14 +331,19 @@ fun AddEventScreen(
     val context = LocalContext.current
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         TopAppBar(
             title = { Text("Add Event") },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
                 }
             }
         )
@@ -288,7 +362,9 @@ fun AddEventScreen(
             value = description,
             onValueChange = { description = it },
             label = { Text("Event Description") },
-            modifier = Modifier.fillMaxWidth().height(120.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
         )
         Spacer(Modifier.height(12.dp))
 
@@ -325,10 +401,12 @@ fun AddEventScreen(
             ) { Text("Tomorrow") }
         }
 
-
         Spacer(Modifier.height(16.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             OutlinedTextField(
                 value = hour,
                 onValueChange = { hour = it.filter { c -> c.isDigit() } },
@@ -357,6 +435,8 @@ fun AddEventScreen(
                 }
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Save Event") }
+        ) {
+            Text("Save Event")
+        }
     }
 }
