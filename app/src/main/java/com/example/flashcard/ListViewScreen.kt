@@ -16,11 +16,11 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
-data class Flashcard(
-    val id: String,
-    val question: String,
-    val answer: String
-)
+//data class Flashcard(
+//    val id: String,
+//    val question: String,
+//    val answer: String
+//)
 
 @Composable
 fun ListViewScreen(navController: NavController, topicId: String) {

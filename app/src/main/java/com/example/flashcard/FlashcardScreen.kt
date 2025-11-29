@@ -29,11 +29,11 @@ data class Topic(
     val name: String = ""
 )
 
-//data class Flashcard(
-//    val id: String = "",
-//    val question: String = "",
-//    val answer: String = ""
-//)
+data class Flashcard(
+    val id: String = "",
+    val question: String = "",
+    val answer: String = ""
+)
 
 // --- ViewModel ---
 class FlashcardViewModel : ViewModel() {

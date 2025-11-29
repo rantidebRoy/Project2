@@ -270,10 +270,20 @@ fun SetTimerScreen(viewModel: TimerModel, context: Context) {
             OutlinedTextField(value = viewModel.totalCycles, onValueChange = { viewModel.totalCycles = it }, label = { Text("Number of Cycles") })
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = viewModel.enableDND, onCheckedChange = {
-                    viewModel.enableDND = it
-                    if (it) viewModel.requestDNDPermission(context)
-                })
+                Checkbox(
+                    checked = viewModel.enableDND,
+                    onCheckedChange = { checked ->
+                        viewModel.enableDND = checked
+
+                        if (checked) {
+                            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            if (!nm.isNotificationPolicyAccessGranted) {
+                                viewModel.requestDNDPermission(context)
+                            }
+                        }
+                    }
+                )
+
                 Text("Enable DND during Focus?")
             }
         }
