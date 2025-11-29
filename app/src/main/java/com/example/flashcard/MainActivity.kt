@@ -323,6 +323,7 @@ private val onboardingPages = listOf(
 fun IntroScreen(navController: NavController) {
     val pages = onboardingPages
     val pagerState = rememberPagerState { pages.size }
+    val isLastPage = pagerState.currentPage == pages.lastIndex
 
     Column(
         modifier = Modifier
@@ -355,13 +356,14 @@ fun IntroScreen(navController: NavController) {
                 Text("Skip")
             }
         }
+
         Spacer(modifier = Modifier.height(24.dp))
-        // Swipeable pager with images
+
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp), // space at left/right
-            pageSpacing = 24.dp                               // gap between pages
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            pageSpacing = 24.dp
         ) { page ->
             Image(
                 painter = painterResource(id = pages[page].imageRes),
@@ -373,10 +375,8 @@ fun IntroScreen(navController: NavController) {
             )
         }
 
-
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Dots indicator using pagerState.currentPage
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -401,30 +401,27 @@ fun IntroScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        //Bottom button: Next / Get Started
-        Button(
-            onClick = {
-                if (pagerState.currentPage < pages.lastIndex) {
-                    // scroll to next page
-                    // use coroutine scope outside if you want smooth animateScrollToPage
-                } else {
+        // Only show Get Started button on last page
+        if (isLastPage) {
+            Button(
+                onClick = {
                     navController.navigate(SIGNUP_ROUTE) {
                         popUpTo(INTRO_ROUTE) { inclusive = true }
                     }
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(55.dp),
-            shape = MaterialTheme.shapes.extraLarge
-        ) {
-            Text(
-                text = if (pagerState.currentPage < pages.lastIndex) "Next" else "Get Started",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(55.dp),
+                shape = MaterialTheme.shapes.extraLarge
+            ) {
+                Text(
+                    text = "Get Started",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         TextButton(
             onClick = {
@@ -434,10 +431,14 @@ fun IntroScreen(navController: NavController) {
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Already have an account? Log In")
+            Text(
+                text = "Already have an account? Log In",
+                style = MaterialTheme.typography.bodySmall // smaller text
+            )
         }
     }
 }
+
 // -------------------------------------------------------------
 // Existing Screens — unchanged except routing updated
 // -------------------------------------------------------------
