@@ -310,76 +310,117 @@ fun SplashScreen(navController: NavController, sessionManager: SessionManager) {
 
 @Composable
 fun IntroScreen(navController: NavController) {
-
-    val scrollState = rememberScrollState()
+    val pages = onboardingPages
+    var currentPage by remember { mutableStateOf(0) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
 
-        // App Name
-        Text(
-            text = "Study Buddy",
-            style = MaterialTheme.typography.displayMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Description
-        Text(
-            text = "Learn Smarter. Study Better. Achieve More.\n" +
-                    "Features include:\n" +
-                    "• Flashcards: Memorize and revise concepts.\n" +
-                    "• Scheduler: Plan your study sessions.\n" +
-                    "• Timer: Focus with Pomodoro-style timers.\n" +
-                    "• Q&A: Ask questions and get answers.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        // Sign Up Button
-        Button(
-            onClick = { navController.navigate(SIGNUP_ROUTE) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(55.dp),
-            shape = MaterialTheme.shapes.extraLarge
+        // Top bar: app name + Skip
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Sign Up",
-                style = MaterialTheme.typography.titleMedium
+                text = "Study Buddy",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
             )
+
+            TextButton(
+                onClick = {
+                    // Go directly to Sign Up / Login page
+                    navController.navigate(SIGNUP_ROUTE) {
+                        popUpTo(INTRO_ROUTE) { inclusive = true }
+                    }
+                }
+            ) {
+                Text("Skip")
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Log In Button
-        Button(
-            onClick = { navController.navigate(LOGIN_ROUTE) },
+        // Center: current image
+        Image(
+            painter = painterResource(id = pages[currentPage].imageRes),
+            contentDescription = "Intro image ${currentPage + 1}",
             modifier = Modifier
                 .fillMaxWidth()
-                .height(55.dp),
-            shape = MaterialTheme.shapes.extraLarge
-        ) {
-            Text(
-                text = "Log In",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
+                .weight(1f)
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // Dots indicator (optional but nice)
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            pages.forEachIndexed { index, _ ->
+                val isSelected = index == currentPage
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(if (isSelected) 10.dp else 8.dp)
+                        .background(
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            shape = CircleShape
+                        )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Bottom buttons: Next / Get Started
+        Button(
+            onClick = {
+                if (currentPage < pages.lastIndex) {
+                    currentPage += 1
+                } else {
+                    // Last page -> go to Sign Up / Login screen
+                    navController.navigate(SIGNUP_ROUTE) {
+                        popUpTo(INTRO_ROUTE) { inclusive = true }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(55.dp),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Text(
+                text = if (currentPage < pages.lastIndex) "Next" else "Get Started",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Optional: small text button to go to Login directly
+        TextButton(
+            onClick = {
+                navController.navigate(LOGIN_ROUTE) {
+                    popUpTo(INTRO_ROUTE) { inclusive = true }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Already have an account? Log In")
+        }
     }
 }
+
 
 
 // -------------------------------------------------------------
@@ -466,6 +507,17 @@ data class CardItem(
     val icon: ImageVector,
     val onClick: () -> Unit
 )
+
+data class OnboardingPage(
+    val imageRes: Int
+)
+private val onboardingPages = listOf(
+    OnboardingPage(R.drawable.flashcards),
+    OnboardingPage(R.drawable.timer),
+    OnboardingPage(R.drawable.scheduler),
+    OnboardingPage(R.drawable.qna)
+)
+
 
 
 // ---------------- CARD UI ----------------
@@ -810,10 +862,7 @@ fun AboutScreen(onBack: () -> Unit) {
     val scroll = rememberScrollState()
 
     // ~250-word project description (approx.)
-    val projectDescription = """
-        Study Buddy is a lightweight learning application developed using Kotlin and Jetpack Compose with the goal of helping students memorize material and maintain focused study sessions. 
-        The app features a flashcards module that presents questions and answers for active recall practice, a timer module that provides Pomodoro-style focus sessions with pause/resume and background ticking, a scheduler that enables users to schedule short study reminders and receive notifications, and a Q&A module for community driven questions and answers. The current implementation uses Firebase Authentication and Firestore for user sign-up and profile management; however, certain features (like local flashcard persistence) are intentionally kept in-memory for the initial prototype and will be upgraded in later milestones to use Room or a remote database. The design follows MVVM principles to separate UI from business logic, leverages Material Design 3 for a modern aesthetic, and is structured to allow incremental improvements such as persistent storage for flashcards, a repetitive focus/break timer cycle, and richer Q&A backend integration. This project is a collaborative effort intended for learning and a demonstration of modern Android practices, focused on clean Compose UI, coroutine-based background tasks, and Firebase integration.
-    """.trimIndent()
+//
 
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
         TopAppBar(
@@ -838,9 +887,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Text("• 2022331059 - Supto Das")
             Spacer(Modifier.height(16.dp))
 
-            Text("Project", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(projectDescription, style = MaterialTheme.typography.bodyMedium)
+
 
             Spacer(Modifier.height(24.dp))
             Text("Contact & Repo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
