@@ -1,9 +1,13 @@
 package com.example.flashcard
 
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -857,6 +861,8 @@ fun TopicOptionsScreen(
 }
 
 // --- Shuffle Flashcard Screen ---
+// --- Shuffle Flashcard Screen ---
+// --- Shuffle Flashcard Screen ---
 @Composable
 fun ShuffleFlashcardScreen(
     flashcard: Flashcard,
@@ -865,22 +871,73 @@ fun ShuffleFlashcardScreen(
     onNext: () -> Unit,
     onEndSession: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp),
+    val questionScroll = rememberScrollState()
+    val answerScroll = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center) {
-        Text("Q: ${flashcard.question}", style = MaterialTheme.typography.headlineSmall)
-        if (showAnswer) {
-            Spacer(Modifier.height(16.dp))
-            Text("A: ${flashcard.answer}", style = MaterialTheme.typography.bodyLarge)
+        verticalArrangement = Arrangement.Center
+    ) {
+
+        // Question Box (scrollable, 3 lines visible)
+        Text("Question:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(Modifier.height(6.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(90.dp) // ~3 lines
+                .border(1.dp, MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.medium)
+                .padding(8.dp)
+                .verticalScroll(questionScroll)
+        ) {
+            Text(
+                text = flashcard.question,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
+
+        // ANSWER (scrollable, only if shown)
+        if (showAnswer) {
+            Spacer(Modifier.height(24.dp))
+            Text("Answer:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(Modifier.height(6.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp) // ~3 lines
+                    .border(1.dp, MaterialTheme.colorScheme.secondary, shape = MaterialTheme.shapes.medium)
+                    .padding(8.dp)
+                    .verticalScroll(answerScroll)
+            ) {
+                Text(
+                    text = flashcard.answer,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
-        if (!showAnswer) Button(onClick = onShowAnswer, modifier = Modifier.fillMaxWidth()) { Text("Show Answer") }
+
+        // Buttons
+        if (!showAnswer) {
+            Button(onClick = onShowAnswer, modifier = Modifier.fillMaxWidth()) {
+                Text("Show Answer")
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("Next") }
         Spacer(Modifier.height(8.dp))
         Button(onClick = onEndSession, modifier = Modifier.fillMaxWidth()) { Text("End Session") }
     }
 }
+
+
 
 // --- List View with Delete ---
 @Composable
