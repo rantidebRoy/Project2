@@ -26,10 +26,14 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+// ----------------------------------------------------------------------
+// SchedulerScreen
+// ----------------------------------------------------------------------
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchedulerScreen(onBack: () -> Unit) {
-    var currentView by remember { mutableStateOf("main") } // "main", "add", "today", "tomorrow", "details"
+    var currentView by remember { mutableStateOf("main") }
     var selectedEvent by remember { mutableStateOf<Map<String, Any>?>(null) }
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
@@ -38,7 +42,7 @@ fun SchedulerScreen(onBack: () -> Unit) {
 
     when (currentView) {
 
-        // --- Main Menu styled like MainScreen ---
+        // --- Main Menu ---
         "main" -> {
             val schedulerCards = listOf(
                 CardItem(
@@ -68,18 +72,9 @@ fun SchedulerScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.White)
-                    .padding(20.dp)
             ) {
                 TopAppBar(
-                    title = {
-                        Text(
-                            text = "Scheduler",
-                            style = MaterialTheme.typography.headlineSmall.copy(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    },
+                    title = { Text("Scheduler") },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
@@ -90,18 +85,24 @@ fun SchedulerScreen(onBack: () -> Unit) {
                     }
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp)   // content only
                 ) {
-                    items(schedulerCards.size) { index ->
-                        FeatureCard(schedulerCards[index])
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(schedulerCards.size) { index ->
+                            FeatureCard(schedulerCards[index])
+                        }
                     }
                 }
             }
@@ -130,7 +131,7 @@ fun SchedulerScreen(onBack: () -> Unit) {
                                 context = context,
                                 title = title,
                                 description = description,
-                                dateType = date, // "today" or "tomorrow"
+                                dateType = date,
                                 hour = hour,
                                 minute = minute
                             )
@@ -175,13 +176,12 @@ fun SchedulerScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.White)
-                    .padding(24.dp)
             ) {
                 TopAppBar(
                     title = {
                         Text(
-                            if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule",
-                            )
+                            if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule"
+                        )
                     },
                     navigationIcon = {
                         IconButton(onClick = { currentView = "main" }) {
@@ -193,36 +193,42 @@ fun SchedulerScreen(onBack: () -> Unit) {
                     }
                 )
 
-                Spacer(Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp)   // content only
+                ) {
+                    Spacer(Modifier.height(16.dp))
 
-                if (events.isEmpty()) {
-                    Text("No events found.")
-                } else {
-                    LazyColumn {
-                        items(events.size) { index ->
-                            val event = events[index]
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable {
-                                        selectedEvent = event
-                                        currentView = "details"
-                                    },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                shape = RoundedCornerShape(16.dp),
-                                elevation = CardDefaults.cardElevation(2.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp)
+                    if (events.isEmpty()) {
+                        Text("No events found.")
+                    } else {
+                        LazyColumn {
+                            items(events.size) { index ->
+                                val event = events[index]
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable {
+                                            selectedEvent = event
+                                            currentView = "details"
+                                        },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(16.dp),
+                                    elevation = CardDefaults.cardElevation(2.dp)
                                 ) {
-                                    Text(
-                                        text = event["title"] as? String ?: "",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    Column(
+                                        modifier = Modifier.padding(16.dp)
+                                    ) {
+                                        Text(
+                                            text = event["title"] as? String ?: "",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -245,13 +251,15 @@ fun SchedulerScreen(onBack: () -> Unit) {
                         .background(Color.White)
                 ) {
                     TopAppBar(
-                        title = { Text("Event Details",
-                            style = MaterialTheme.typography.headlineSmall.copy(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
+                        title = {
+                            Text(
+                                "Event Details",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
-                            ) },
-
+                        },
                         navigationIcon = {
                             IconButton(onClick = {
                                 currentView = if (dateFilter == "today") "today" else "tomorrow"
@@ -299,11 +307,10 @@ fun SchedulerScreen(onBack: () -> Unit) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(24.dp)
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.Start
                     ) {
-                        Spacer(Modifier.height(16.dp))
                         Text(
                             "Title: ${event["title"]}",
                             style = MaterialTheme.typography.titleLarge
@@ -325,6 +332,10 @@ fun SchedulerScreen(onBack: () -> Unit) {
     }
 }
 
+// ----------------------------------------------------------------------
+// AddEventScreen
+// ----------------------------------------------------------------------
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEventScreen(
@@ -342,15 +353,9 @@ fun AddEventScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         TopAppBar(
-            title = { Text("Add Event",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )) },
+            title = { Text("Add Event") },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(
@@ -361,95 +366,101 @@ fun AddEventScreen(
             }
         )
 
-        Spacer(Modifier.height(20.dp))
-
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text("Event Title") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = description,
-            onValueChange = { description = it },
-            label = { Text("Event Description") },
+        // CONTENT ONLY – no fillMaxSize here
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp)
-        )
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = { date = "today" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (date == "today")
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (date == "today")
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) { Text("Today") }
-
-            Button(
-                onClick = { date = "tomorrow" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (date == "tomorrow")
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (date == "tomorrow")
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) { Text("Tomorrow") }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             OutlinedTextField(
-                value = hour,
-                onValueChange = { hour = it.filter { c -> c.isDigit() } },
-                label = { Text("Hour") },
-                modifier = Modifier.weight(1f)
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Event Title") },
+                modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.height(12.dp))
+
             OutlinedTextField(
-                value = minute,
-                onValueChange = { minute = it.filter { c -> c.isDigit() } },
-                label = { Text("Minute") },
-                modifier = Modifier.weight(1f)
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Event Description") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
             )
-        }
+            Spacer(Modifier.height(12.dp))
 
-        Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(
+                    onClick = { date = "today" },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (date == "today")
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (date == "today")
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) { Text("Today") }
 
-        Button(
-            onClick = {
-                val hourInt = hour.toIntOrNull() ?: 0
-                val minuteInt = minute.toIntOrNull() ?: 0
-                if (title.isNotBlank() && description.isNotBlank()) {
-                    onSave(title, description, date, hourInt, minuteInt)
-                } else {
-                    Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Save Event")
+                Button(
+                    onClick = { date = "tomorrow" },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (date == "tomorrow")
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (date == "tomorrow")
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) { Text("Tomorrow") }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                OutlinedTextField(
+                    value = hour,
+                    onValueChange = { hour = it.filter { c -> c.isDigit() } },
+                    label = { Text("Hour") },
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(12.dp))
+                OutlinedTextField(
+                    value = minute,
+                    onValueChange = { minute = it.filter { c -> c.isDigit() } },
+                    label = { Text("Minute") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick = {
+                    val hourInt = hour.toIntOrNull() ?: 0
+                    val minuteInt = minute.toIntOrNull() ?: 0
+                    if (title.isNotBlank() && description.isNotBlank()) {
+                        onSave(title, description, date, hourInt, minuteInt)
+                    } else {
+                        Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Save Event")
+            }
         }
     }
 }

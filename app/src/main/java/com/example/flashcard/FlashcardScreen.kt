@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -379,7 +380,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                 title = {
                     Text(
                         when (currentView) {
-                            "topics" -> "Topics"
+                            "topics" -> "Flashcards"
                             "addTopic" -> "Add Topic"
                             "topicOptions" -> viewModel.currentTopic?.name ?: ""
                             "shuffle" -> viewModel.currentTopic?.name ?: ""
@@ -397,17 +398,69 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                             "addTopic" -> currentView = "topics"
                             "topicOptions" -> currentView = "topics"
                             "shuffle", "list" -> currentView = "topicOptions"
-                            "addFlashcard" -> currentView = "list"
+                            "addFlashcard" -> currentView = "topicOptions"
                             "import" -> currentView = "topics"
                         }
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    // Show icons only for topic-related screens
+                    when (currentView) {
+                        "topicOptions", "list" -> {
+                            // ADD icon (new)
+                            IconButton(onClick = {
+                                currentView = "addFlashcard"
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = "Add Flashcard")
+                            }
+
+                            // Share icon
+                            IconButton(onClick = {
+                                viewModel.shareTopic(
+                                    onDone = {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Topic shared")
+                                        }
+                                    },
+                                    onFailure = { e ->
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Share failed: ${e.message}")
+                                        }
+                                    }
+                                )
+                            }) {
+                                Icon(Icons.Default.Share, contentDescription = "Share Topic")
+                            }
+
+                            // Delete icon (topic delete)
+                            IconButton(onClick = {
+                                viewModel.currentTopic?.id?.let { id ->
+                                    viewModel.deleteTopic(id,
+                                        onDone = {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Topic deleted")
+                                            }
+                                            currentView = "topics"
+                                        },
+                                        onFailure = { e ->
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Delete failed: ${e.message}")
+                                            }
+                                        }
+                                    )
+                                }
+                            }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Topic")
+                            }
+                        }
+                    }
                 }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
+    )  { padding ->
         Box(Modifier.padding(padding)) {
             when (currentView) {
                 // --- Topic List ---
@@ -417,10 +470,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                         viewModel.loadFlashcards(it)
                         currentView = "topicOptions"
                     },
-                    onAddTopic = {
-                        // navigate to add topic - but handle success snackbar here
-                        currentView = "addTopic"
-                    },
+                    onAddTopic = { currentView = "addTopic" },
                     onImportTopics = { currentView = "import" }
                 )
 
@@ -444,7 +494,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                     onCancel = { currentView = "topics" }
                 )
 
-                // --- Topic Options ---
+                // --- NEW: TopicOptionsScreen (your list + resume design) ---
                 "topicOptions" -> TopicOptionsScreen(
                     viewModel = viewModel,
                     onSelectShuffle = {
@@ -453,60 +503,38 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                         showAnswer = false
                         currentView = "shuffle"
                     },
-                    onSelectList = { currentView = "list" },
-                    onBack = { currentView = "topics" },
-                    onShareTopic = {
-                        viewModel.shareTopic(
-                            onDone = {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Topic shared")
-                                }
-                                currentView = "topics"
-                            },
-                            onFailure = { e ->
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Share failed: ${e.message}")
-                                }
-                            }
-                        )
+                    modifier = Modifier
+                )
+
+
+                // --- Add Flashcard (stays the same) ---
+                "addFlashcard" -> AddFlashcardScreen(
+                    viewModel = viewModel,
+                    onDone = {
+                        // CRITICAL: Go back to topicOptionsScreen, NOT "list"
+                        currentView = "topicOptions"
                     },
-                    onDeleteTopic = {
-                        viewModel.currentTopic?.id?.let { id ->
-                            viewModel.deleteTopic(id, onDone = {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Topic deleted")
-                                }
-                                currentView = "topics"
-                            }, onFailure = { e ->
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Delete failed: ${e.message}")
-                                }
-                            })
-                        }
-                    }
+                    onCancel = { currentView = "topicOptions" }  // Changed from "list"
                 )
 
                 // --- Shuffle ---
                 "shuffle" -> {
-                    if (shuffledFlashcards.isEmpty()) {
-                        Text("No flashcards in this topic.", Modifier.padding(24.dp))
-                    } else {
-                        val currentCard = shuffledFlashcards.getOrNull(currentShuffleIndex)
-                        currentCard?.let { card ->
-                            ShuffleFlashcardScreen(
-                                flashcard = card,
-                                showAnswer = showAnswer,
-                                onShowAnswer = { showAnswer = true },
-                                onNext = {
+                    val currentFlashcard = shuffledFlashcards.getOrNull(currentShuffleIndex)
+                    currentFlashcard?.let {
+                        ShuffleFlashcardScreen(
+                            flashcard = it,
+                            showAnswer = showAnswer,
+                            onShowAnswer = { showAnswer = true },
+                            onNext = {
+                                if (currentShuffleIndex < shuffledFlashcards.size - 1) {
                                     currentShuffleIndex++
                                     showAnswer = false
-                                    if (currentShuffleIndex >= shuffledFlashcards.size) {
-                                        currentView = "topicOptions"
-                                    }
-                                },
-                                onEndSession = { currentView = "topicOptions" }
-                            )
-                        }
+                                } else {
+                                    currentView = "topicOptions"
+                                }
+                            },
+                            onEndSession = { currentView = "topicOptions" }
+                        )
                     }
                 }
 
@@ -835,25 +863,61 @@ fun ImportTopicsScreen(
 fun TopicOptionsScreen(
     viewModel: FlashcardViewModel,
     onSelectShuffle: () -> Unit,
-    onSelectList: () -> Unit,
-    onBack: () -> Unit,
-    onShareTopic: () -> Unit,
-    onDeleteTopic: () -> Unit
+    modifier: Modifier = Modifier
 ) {
+    val flashcards = viewModel.flashcards
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = modifier
+            .fillMaxSize()          // comes from Box(padding) in Scaffold
     ) {
-        Button(onClick = onSelectShuffle, modifier = Modifier.fillMaxWidth()) { Text("Shuffle All") }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onSelectList, modifier = Modifier.fillMaxWidth()) { Text("List View") }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onShareTopic, modifier = Modifier.fillMaxWidth()) { Text("Share Topic") }
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = onDeleteTopic, modifier = Modifier.fillMaxWidth()) { Text("Delete Topic") }
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),     // LEFT–RIGHT padding here
+            contentPadding = PaddingValues(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(flashcards) { card ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
+                            Text("A: ${card.answer}")
+                        }
+                        IconButton(onClick = { viewModel.deleteFlashcard(card.id) }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete Flashcard",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Button(
+            onClick = onSelectShuffle,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp)  // LEFT–RIGHT padding for button
+        ) {
+            Text("Shuffle")
+        }
     }
 }
+
+
 
 // --- Shuffle Flashcard Screen ---
 // --- Shuffle Flashcard Screen ---
