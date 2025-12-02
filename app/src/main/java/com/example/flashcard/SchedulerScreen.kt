@@ -174,13 +174,14 @@ fun SchedulerScreen(onBack: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color.White)
                     .padding(24.dp)
             ) {
                 TopAppBar(
                     title = {
                         Text(
-                            if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule"
-                        )
+                            if (dateFilter == "today") "Today's Schedule" else "Tomorrow's Schedule",
+                            )
                     },
                     navigationIcon = {
                         IconButton(onClick = { currentView = "main" }) {
@@ -241,9 +242,16 @@ fun SchedulerScreen(onBack: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .background(Color.White)
                 ) {
                     TopAppBar(
-                        title = { Text("Event Details") },
+                        title = { Text("Event Details",
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            ) },
+
                         navigationIcon = {
                             IconButton(onClick = {
                                 currentView = if (dateFilter == "today") "today" else "tomorrow"
@@ -333,11 +341,16 @@ fun AddEventScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.White)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         TopAppBar(
-            title = { Text("Add Event") },
+            title = { Text("Add Event",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(

@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -671,12 +672,6 @@ fun ImportTopicsScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-            Text("Import Topics", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        }
 
         Spacer(Modifier.height(8.dp))
 
@@ -958,22 +953,44 @@ fun FlashcardListWithDeleteScreen(
 
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(viewModel.flashcards) { card ->
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(4.dp)) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                        Column(modifier = Modifier.align(Alignment.CenterStart)) {
-                            Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+
+                        // Text column takes remaining space, avoiding overlap
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)               // ← ensures text expands but avoids icon area
+                        ) {
+                            Text(
+                                "Q: ${card.question}",
+                                fontWeight = FontWeight.Bold
+                            )
                             Text("A: ${card.answer}")
                         }
 
-                        IconButton(onClick = { viewModel.deleteFlashcard(card.id) },
-                            modifier = Modifier.align(Alignment.TopEnd)) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Flashcard", tint = MaterialTheme.colorScheme.error)
+                        // Delete button stays on the right side with spacing
+                        IconButton(onClick = { viewModel.deleteFlashcard(card.id) }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete Flashcard",
+                                tint = MaterialTheme.colorScheme.primary
+
+                            )
                         }
                     }
                 }
             }
         }
+
 
         Spacer(Modifier.height(16.dp))
 

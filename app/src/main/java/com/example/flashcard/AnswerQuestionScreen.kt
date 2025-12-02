@@ -84,6 +84,7 @@ fun AnswerQuestionScreen(
     }
 
     Scaffold(
+        containerColor = Color.White,
         topBar = {
             TopAppBar(
                 title = { Text("Find Questions") },

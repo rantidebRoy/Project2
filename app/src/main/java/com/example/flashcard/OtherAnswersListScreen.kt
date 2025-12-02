@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.FirebaseFirestore
@@ -75,7 +76,7 @@ fun OtherAnswersListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Other Answers") },
+                title = { Text("Previous Answers") },
                 navigationIcon = {
                     IconButton(onClick = { onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -156,7 +157,7 @@ fun OtherAnswersListScreen(
                                             Icon(
                                                 Icons.Default.Delete,
                                                 contentDescription = "Delete",
-                                                tint = MaterialTheme.colorScheme.error
+                                                tint = Color.Black
                                             )
                                         }
                                     }

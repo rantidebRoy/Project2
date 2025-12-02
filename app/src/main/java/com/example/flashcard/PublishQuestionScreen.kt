@@ -73,6 +73,7 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .background(Color.White)
             .padding(24.dp)
     ) {
 
