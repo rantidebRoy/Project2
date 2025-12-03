@@ -31,11 +31,9 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
 
     var sequentialId by remember { mutableStateOf<Int?>(null) }
 
-    // Tag Suggestions
     var suggestions by remember { mutableStateOf(listOf<String>()) }
     var showDropdown by remember { mutableStateOf(false) }
 
-    // Fetch user's sequential ID
     LaunchedEffect(userId) {
         if (userId.isNotEmpty()) {
             db.collection("users").document(userId).get()
@@ -48,9 +46,6 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
         }
     }
 
-    // ------------------------------
-    // REALTIME TAG MATCHING
-    // ------------------------------
     LaunchedEffect(tag) {
         if (tag.isBlank()) {
             suggestions = emptyList()
@@ -72,11 +67,8 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .background(Color.White)
-            .padding(24.dp)
     ) {
-
         TopAppBar(
             title = { Text("Publish Question") },
             navigationIcon = {
@@ -88,28 +80,20 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
                 TextButton(
                     onClick = {
                         if (title.isNotBlank() && body.isNotBlank() && tag.isNotBlank()) {
-
                             if (sequentialId == null) {
                                 Toast.makeText(context, "User ID not loaded", Toast.LENGTH_SHORT).show()
                                 return@TextButton
                             }
 
-                            // ------------------------------
-                            // CHECK IF TAG EXISTS FIRST
-                            // ------------------------------
                             db.collection("qna_tag")
                                 .whereEqualTo("name", tag)
                                 .get()
                                 .addOnSuccessListener { snapshot ->
                                     if (snapshot.isEmpty) {
-                                        // Add new tag if not present
                                         val newTag = hashMapOf("name" to tag)
                                         db.collection("qna_tag").add(newTag)
                                     }
 
-                                    // ------------------------------
-                                    // PUBLISH QUESTION
-                                    // ------------------------------
                                     val question = hashMapOf(
                                         "title" to title,
                                         "body" to body,
@@ -135,7 +119,6 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
                                             ).show()
                                         }
                                 }
-
                         } else {
                             Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
                         }
@@ -146,70 +129,75 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
             }
         )
 
-        Spacer(Modifier.height(24.dp))
-
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text("Question Title") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = body,
-            onValueChange = { body = it },
-            label = { Text("Question Body") },
+        // Content area with padding
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-        )
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),   // padding only below app bar
+        ) {
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
 
-        // ------------------------------
-        // TAG INPUT + DROPDOWN SUGGESTIONS
-        // ------------------------------
-        Box {
             OutlinedTextField(
-                value = tag,
-                onValueChange = {
-                    tag = it
-                },
-                label = { Text("Tag") },
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Question Title") },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            DropdownMenu(
-                expanded = showDropdown,
-                onDismissRequest = { showDropdown = false },
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = body,
+                onValueChange = { body = it },
+                label = { Text("Question Body") },
                 modifier = Modifier
-                    .background(Color.White)
-                    .heightIn(max = 150.dp)   // max 3 items scrollable
-            ) {
-                suggestions.forEach { suggestion ->
-                    DropdownMenuItem(
-                        text = { Text(suggestion) },
-                        onClick = {
-                            tag = suggestion
-                            showDropdown = false
-                        }
-                    )
+                    .fillMaxWidth()
+                    .height(200.dp)
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Box {
+                OutlinedTextField(
+                    value = tag,
+                    onValueChange = { tag = it },
+                    label = { Text("Tag") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                DropdownMenu(
+                    expanded = showDropdown,
+                    onDismissRequest = { showDropdown = false },
+                    modifier = Modifier
+                        .background(Color.White)
+                        .heightIn(max = 150.dp)
+                ) {
+                    suggestions.forEach { suggestion ->
+                        DropdownMenuItem(
+                            text = { Text(suggestion) },
+                            onClick = {
+                                tag = suggestion
+                                showDropdown = false
+                            }
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
-        if (sequentialId == null) {
-            Text(
-                text = "Fetching user ID...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
-            )
-        } else {
-            Text("Your User ID: $sequentialId", style = MaterialTheme.typography.bodyMedium)
+            if (sequentialId == null) {
+                Text(
+                    text = "Fetching user ID...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else {
+                Text("Your User ID: $sequentialId", style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }
+
