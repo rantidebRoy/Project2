@@ -25,6 +25,21 @@ import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlin.random.Random
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import com.cloudinary.android.MediaManager
+import com.cloudinary.android.callback.ErrorInfo
+import com.cloudinary.android.callback.UploadCallback
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.Close
 import kotlinx.coroutines.launch
 
 // --- Data Models ---
@@ -36,7 +51,9 @@ data class Topic(
 data class Flashcard(
     val id: String = "",
     val question: String = "",
-    val answer: String = ""
+    val answer: String = "",
+    val questionImageUrl: String? = null,
+    val answerImageUrl: String? = null
 )
 
 // --- ViewModel ---
@@ -141,14 +158,16 @@ class FlashcardViewModel : ViewModel() {
                             Flashcard(
                                 id = doc.id,
                                 question = doc.get("question")?.toString() ?: "",
-                                answer = doc.get("answer")?.toString() ?: ""
+                                answer = doc.get("answer")?.toString() ?: "",
+                                questionImageUrl = doc.get("questionImageUrl")?.toString(),
+                                answerImageUrl = doc.get("answerImageUrl")?.toString()
                             )
                         }
                     }
             }
     }
 
-    fun addFlashcard(question: String, answer: String, onDone: () -> Unit, onFailure: (Exception) -> Unit = {}) {
+    fun addFlashcard(question: String, answer: String, questionImageUrl: String?, answerImageUrl: String?, onDone: () -> Unit, onFailure: (Exception) -> Unit = {}) {
         val uid = auth.currentUser?.uid ?: return
         val topic = currentTopic ?: return
 
@@ -158,7 +177,12 @@ class FlashcardViewModel : ViewModel() {
             .addOnSuccessListener { topicDocs ->
                 val topicDoc = topicDocs.documents.firstOrNull() ?: return@addOnSuccessListener
 
-                val flashcard = hashMapOf("question" to question, "answer" to answer)
+                val flashcard = hashMapOf(
+                    "question" to question,
+                    "answer" to answer,
+                    "questionImageUrl" to questionImageUrl,
+                    "answerImageUrl" to answerImageUrl
+                )
 
                 topicDoc.reference.collection("flashcards")
                     .add(flashcard)
@@ -236,7 +260,9 @@ class FlashcardViewModel : ViewModel() {
                                                 for (fDoc in newFlashcards.documents) {
                                                     val data = mapOf(
                                                         "question" to (fDoc.get("question")?.toString() ?: ""),
-                                                        "answer" to (fDoc.get("answer")?.toString() ?: "")
+                                                        "answer" to (fDoc.get("answer")?.toString() ?: ""),
+                                                        "questionImageUrl" to (fDoc.get("questionImageUrl")?.toString()),
+                                                        "answerImageUrl" to (fDoc.get("answerImageUrl")?.toString())
                                                     )
                                                     val newFlashRef = globalRef.collection("flashcards").document()
                                                     batchAdd.set(newFlashRef, data)
@@ -319,7 +345,9 @@ class FlashcardViewModel : ViewModel() {
                                             for (fDoc in flashDocs.documents) {
                                                 val data = mapOf(
                                                     "question" to (fDoc.get("question")?.toString() ?: ""),
-                                                    "answer" to (fDoc.get("answer")?.toString() ?: "")
+                                                    "answer" to (fDoc.get("answer")?.toString() ?: ""),
+                                                    "questionImageUrl" to (fDoc.get("questionImageUrl")?.toString()),
+                                                    "answerImageUrl" to (fDoc.get("answerImageUrl")?.toString())
                                                 )
                                                 val newFlashRef = newTopicDoc.reference.collection("flashcards").document()
                                                 batch.set(newFlashRef, data)
@@ -932,6 +960,60 @@ fun ShuffleFlashcardScreen(
 ) {
     val questionScroll = rememberScrollState()
     val answerScroll = rememberScrollState()
+    var viewingImage by remember { mutableStateOf<String?>(null) } // URL to view
+
+    if (viewingImage != null) {
+        Dialog(onDismissRequest = { viewingImage = null }) {
+            // Zoomable Box logic
+            var scale by remember { mutableStateOf(1f) }
+            var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+            val state = rememberTransformableState { zoomChange, panChange, _ ->
+                scale = (scale * zoomChange).coerceAtLeast(1f)
+                offset += panChange
+            }
+
+            Box(
+                Modifier
+                    .fillMaxSize() // Fill the dialog area
+                    .clickable { viewingImage = null } // Click outside/background to close (optional, but good UX)
+            ) {
+                // The Image with Zoom
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .transformable(state = state)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = viewingImage,
+                        contentDescription = "Full Image",
+                        modifier = Modifier.fillMaxWidth(), // Provide initial size
+                        contentScale = ContentScale.Fit
+                    )
+                }
+
+                // Close Button (X) - Top End
+                IconButton(
+                    onClick = { viewingImage = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -941,7 +1023,7 @@ fun ShuffleFlashcardScreen(
         verticalArrangement = Arrangement.Center
     ) {
 
-        // Question Box (scrollable, 3 lines visible)
+        // Question Box
         Text("Question:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(6.dp))
 
@@ -958,8 +1040,16 @@ fun ShuffleFlashcardScreen(
                 style = MaterialTheme.typography.bodyLarge
             )
         }
+        
+        // Show Image Button (Question)
+        if (!flashcard.questionImageUrl.isNullOrBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Button(onClick = { viewingImage = flashcard.questionImageUrl }, modifier = Modifier.fillMaxWidth(0.5f)) {
+                Text("View Question Image")
+            }
+        }
 
-        // ANSWER (scrollable, only if shown)
+        // ANSWER
         if (showAnswer) {
             Spacer(Modifier.height(24.dp))
             Text("Answer:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -977,6 +1067,14 @@ fun ShuffleFlashcardScreen(
                     text = flashcard.answer,
                     style = MaterialTheme.typography.bodyLarge
                 )
+            }
+            
+            // Show Image Button (Answer)
+            if (!flashcard.answerImageUrl.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Button(onClick = { viewingImage = flashcard.answerImageUrl }, modifier = Modifier.fillMaxWidth(0.5f)) {
+                    Text("View Answer Image")
+                }
             }
         }
 
@@ -1064,27 +1162,191 @@ fun FlashcardListWithDeleteScreen(
 }
 
 // --- Add Flashcard Screen ---
+// --- Cloudinary Helper Object ---
+object CloudinaryHelper {
+    private var isInit = false
+    fun init(context: Context) {
+        if (isInit) return
+        try {
+            MediaManager.get()
+            isInit = true
+        } catch (e: Exception) {
+            // REPLACE WITH YOUR CREDENTIALS
+            val config = HashMap<String, Any>()
+            config["cloud_name"] = "daq8i0mep" // e.g. "demo"
+            config["secure"] = true
+            MediaManager.init(context, config)
+            isInit = true
+        }
+    }
+
+    fun upload(uri: Uri, context: Context, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        init(context)
+        MediaManager.get().upload(uri)
+            .unsigned("ml_default") // e.g. "unsigned_preset"
+            .callback(object : UploadCallback {
+                override fun onStart(requestId: String?) {}
+                override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
+                override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
+                    val url = resultData?.get("secure_url")?.toString() ?: ""
+                    onSuccess(url)
+                }
+                override fun onError(requestId: String?, error: ErrorInfo?) {
+                    onError(error?.description ?: "Upload Error")
+                }
+                override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
+            })
+            .dispatch()
+    }
+}
+
+// --- Add Flashcard Screen ---
 @Composable
 fun AddFlashcardScreen(viewModel: FlashcardViewModel, onDone: () -> Unit, onCancel: () -> Unit) {
     var question by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("") }
+    var questionImageUri by remember { mutableStateOf<Uri?>(null) }
+    var answerImageUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploading by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center) {
-        Text("Add Flashcard", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(value = question, onValueChange = { question = it }, label = { Text("Question") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(value = answer, onValueChange = { answer = it }, label = { Text("Answer") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(16.dp))
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
-        Button(
-            onClick = { viewModel.addFlashcard(question, answer, onDone = { onDone() }, onFailure = {}) },
-            enabled = question.isNotBlank() && answer.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Save Flashcard") }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+    // Image Pickers
+    val questionImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri -> questionImageUri = uri }
+
+    val answerImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri -> answerImageUri = uri }
+
+    Scaffold(
+        bottomBar = {
+            // Fixed bottom buttons
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Show "Uploading images..." ONLY if we are uploading and have images selected
+                if (isUploading && (questionImageUri != null || answerImageUri != null)) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Text("Uploading images...", modifier = Modifier.align(Alignment.CenterHorizontally))
+                    Spacer(Modifier.height(8.dp))
+                } else if (isUploading) {
+                     // Just saving text without images, optional: "Saving..."
+                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                     Spacer(Modifier.height(8.dp))
+                     Text("Saving...", modifier = Modifier.align(Alignment.CenterHorizontally))
+                     Spacer(Modifier.height(8.dp))
+                }
+                
+                Button(
+                    onClick = {
+                        isUploading = true
+                        var qUrl: String? = null
+                        var aUrl: String? = null
+                        var uploadCount = 0
+                        val totalUploads = (if (questionImageUri != null) 1 else 0) + (if (answerImageUri != null) 1 else 0)
+
+                        fun checkDone() {
+                            if (uploadCount >= totalUploads) {
+                                viewModel.addFlashcard(question, answer, qUrl, aUrl, onDone = {
+                                    isUploading = false
+                                    onDone()
+                                }, onFailure = {
+                                    isUploading = false
+                                })
+                            }
+                        }
+
+                        if (totalUploads == 0) {
+                            checkDone()
+                        } else {
+                            if (questionImageUri != null) {
+                                CloudinaryHelper.upload(questionImageUri!!, context, onSuccess = { url ->
+                                    qUrl = url
+                                    uploadCount++
+                                    checkDone()
+                                }, onError = {
+                                    uploadCount++ // skip on error or handle?
+                                    checkDone()
+                                })
+                            }
+                            if (answerImageUri != null) {
+                                CloudinaryHelper.upload(answerImageUri!!, context, onSuccess = { url ->
+                                    aUrl = url
+                                    uploadCount++
+                                    checkDone()
+                                }, onError = {
+                                    uploadCount++
+                                    checkDone()
+                                })
+                            }
+                        }
+                    },
+                    enabled = question.isNotBlank() && answer.isNotBlank() && !isUploading,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Save Flashcard") }
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+            }
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Add Flashcard", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+
+            // QUESTION INPUT
+            OutlinedTextField(
+                value = question,
+                onValueChange = { question = it },
+                label = { Text("Question") },
+                modifier = Modifier.fillMaxWidth().height(120.dp), // Fixed height ~3-4 lines
+                maxLines = 10, // Allow scrolling internally if needed, but height is fixed
+                singleLine = false
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { 
+                questionImageLauncher.launch(
+                    androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                ) 
+            }) {
+                Text(if (questionImageUri == null) "Add Question Image" else "Change Question Image")
+            }
+            if (questionImageUri != null) {
+                Text("Image selected", fontSize = 12.sp, color = Color.Gray)
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ANSWER INPUT
+            OutlinedTextField(
+                value = answer,
+                onValueChange = { answer = it },
+                label = { Text("Answer") },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                maxLines = 10,
+                singleLine = false
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { 
+                answerImageLauncher.launch(
+                    androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                ) 
+            }) {
+                Text(if (answerImageUri == null) "Add Answer Image" else "Change Answer Image")
+            }
+            if (answerImageUri != null) {
+                Text("Image selected", fontSize = 12.sp, color = Color.Gray)
+            }
+            
+            Spacer(Modifier.height(24.dp))
+        }
     }
 }
