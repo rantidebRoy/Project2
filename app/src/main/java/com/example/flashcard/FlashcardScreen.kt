@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlin.random.Random
 import android.content.Context
 import android.net.Uri
@@ -37,6 +38,7 @@ import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.filled.Close
@@ -53,7 +55,8 @@ data class Flashcard(
     val question: String = "",
     val answer: String = "",
     val questionImageUrl: String? = null,
-    val answerImageUrl: String? = null
+    val answerImageUrl: String? = null,
+    val timestamp: Long = 0
 )
 
 // --- ViewModel ---
@@ -160,9 +163,10 @@ class FlashcardViewModel : ViewModel() {
                                 question = doc.get("question")?.toString() ?: "",
                                 answer = doc.get("answer")?.toString() ?: "",
                                 questionImageUrl = doc.get("questionImageUrl")?.toString(),
-                                answerImageUrl = doc.get("answerImageUrl")?.toString()
+                                answerImageUrl = doc.get("answerImageUrl")?.toString(),
+                                timestamp = doc.getLong("timestamp") ?: 0L
                             )
-                        }
+                        }.sortedByDescending { it.timestamp }
                     }
             }
     }
@@ -181,7 +185,8 @@ class FlashcardViewModel : ViewModel() {
                     "question" to question,
                     "answer" to answer,
                     "questionImageUrl" to questionImageUrl,
-                    "answerImageUrl" to answerImageUrl
+                    "answerImageUrl" to answerImageUrl,
+                    "timestamp" to System.currentTimeMillis()
                 )
 
                 topicDoc.reference.collection("flashcards")
@@ -262,7 +267,8 @@ class FlashcardViewModel : ViewModel() {
                                                         "question" to (fDoc.get("question")?.toString() ?: ""),
                                                         "answer" to (fDoc.get("answer")?.toString() ?: ""),
                                                         "questionImageUrl" to (fDoc.get("questionImageUrl")?.toString()),
-                                                        "answerImageUrl" to (fDoc.get("answerImageUrl")?.toString())
+                                                        "answerImageUrl" to (fDoc.get("answerImageUrl")?.toString()),
+                                                        "timestamp" to (fDoc.getLong("timestamp") ?: 0L)
                                                     )
                                                     val newFlashRef = globalRef.collection("flashcards").document()
                                                     batchAdd.set(newFlashRef, data)
@@ -347,7 +353,8 @@ class FlashcardViewModel : ViewModel() {
                                                     "question" to (fDoc.get("question")?.toString() ?: ""),
                                                     "answer" to (fDoc.get("answer")?.toString() ?: ""),
                                                     "questionImageUrl" to (fDoc.get("questionImageUrl")?.toString()),
-                                                    "answerImageUrl" to (fDoc.get("answerImageUrl")?.toString())
+                                                    "answerImageUrl" to (fDoc.get("answerImageUrl")?.toString()),
+                                                    "timestamp" to (fDoc.getLong("timestamp") ?: 0L)
                                                 )
                                                 val newFlashRef = newTopicDoc.reference.collection("flashcards").document()
                                                 batch.set(newFlashRef, data)
@@ -399,6 +406,9 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
     var currentShuffleIndex by remember { mutableStateOf(0) }
     var showAnswer by remember { mutableStateOf(false) }
 
+    var correctCount by remember { mutableIntStateOf(0) }
+    var wrongCount by remember { mutableIntStateOf(0) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -412,6 +422,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                             "addTopic" -> "Add Topic"
                             "topicOptions" -> viewModel.currentTopic?.name ?: ""
                             "shuffle" -> viewModel.currentTopic?.name ?: ""
+                            "results" -> "Session Results"
                             "list" -> viewModel.currentTopic?.name ?: ""
                             "addFlashcard" -> "Add Flashcard"
                             "import" -> "Import Topics"
@@ -425,7 +436,10 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                             "topics" -> onBack()
                             "addTopic" -> currentView = "topics"
                             "topicOptions" -> currentView = "topics"
-                            "shuffle", "list" -> currentView = "topicOptions"
+                            "topicOptions" -> currentView = "topics"
+                            "shuffle" -> currentView = "results"
+                            "results" -> currentView = "topics"
+                            "list" -> currentView = "topicOptions"
                             "addFlashcard" -> currentView = "topicOptions"
                             "import" -> currentView = "topics"
                         }
@@ -529,6 +543,8 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                         shuffledFlashcards = viewModel.flashcards.shuffled(Random(System.currentTimeMillis()))
                         currentShuffleIndex = 0
                         showAnswer = false
+                        correctCount = 0
+                        wrongCount = 0
                         currentView = "shuffle"
                     },
                     modifier = Modifier
@@ -548,22 +564,45 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                 // --- Shuffle ---
                 "shuffle" -> {
                     val currentFlashcard = shuffledFlashcards.getOrNull(currentShuffleIndex)
-                    currentFlashcard?.let {
+                    if (currentFlashcard != null) {
                         ShuffleFlashcardScreen(
-                            flashcard = it,
+                            flashcard = currentFlashcard,
                             showAnswer = showAnswer,
                             onShowAnswer = { showAnswer = true },
-                            onNext = {
+                            onCorrect = {
+                                correctCount++
                                 if (currentShuffleIndex < shuffledFlashcards.size - 1) {
                                     currentShuffleIndex++
                                     showAnswer = false
                                 } else {
-                                    currentView = "topicOptions"
+                                    currentView = "results"
                                 }
                             },
-                            onEndSession = { currentView = "topicOptions" }
+                            onWrong = {
+                                wrongCount++
+                                if (currentShuffleIndex < shuffledFlashcards.size - 1) {
+                                    currentShuffleIndex++
+                                    showAnswer = false
+                                } else {
+                                    currentView = "results"
+                                }
+                            },
+                            onEndSession = { currentView = "results" }
                         )
+                    } else {
+                        // Should technically not happen unless list empty, but safe fallback
+                        currentView = "topicOptions"
                     }
+                }
+
+                // --- Results ---
+                "results" -> {
+                    SessionResultsScreen(
+                        correct = correctCount,
+                        wrong = wrongCount,
+                        total = correctCount + wrongCount,
+                        onOk = { currentView = "topicOptions" }
+                    )
                 }
 
                 // --- List View ---
@@ -955,16 +994,16 @@ fun ShuffleFlashcardScreen(
     flashcard: Flashcard,
     showAnswer: Boolean,
     onShowAnswer: () -> Unit,
-    onNext: () -> Unit,
+    onCorrect: () -> Unit,
+    onWrong: () -> Unit,
     onEndSession: () -> Unit
 ) {
     val questionScroll = rememberScrollState()
     val answerScroll = rememberScrollState()
-    var viewingImage by remember { mutableStateOf<String?>(null) } // URL to view
+    var viewingImage by remember { mutableStateOf<String?>(null) }
 
     if (viewingImage != null) {
         Dialog(onDismissRequest = { viewingImage = null }) {
-            // Zoomable Box logic
             var scale by remember { mutableStateOf(1f) }
             var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
             val state = rememberTransformableState { zoomChange, panChange, _ ->
@@ -974,10 +1013,9 @@ fun ShuffleFlashcardScreen(
 
             Box(
                 Modifier
-                    .fillMaxSize() // Fill the dialog area
-                    .clickable { viewingImage = null } // Click outside/background to close (optional, but good UX)
+                    .fillMaxSize()
+                    .clickable { viewingImage = null }
             ) {
-                // The Image with Zoom
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -993,23 +1031,15 @@ fun ShuffleFlashcardScreen(
                     AsyncImage(
                         model = viewingImage,
                         contentDescription = "Full Image",
-                        modifier = Modifier.fillMaxWidth(), // Provide initial size
+                        modifier = Modifier.fillMaxWidth(),
                         contentScale = ContentScale.Fit
                     )
                 }
-
-                // Close Button (X) - Top End
                 IconButton(
                     onClick = { viewingImage = null },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White
-                    )
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
             }
         }
@@ -1023,14 +1053,13 @@ fun ShuffleFlashcardScreen(
         verticalArrangement = Arrangement.Center
     ) {
 
-        // Question Box
         Text("Question:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(6.dp))
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(90.dp) // ~3 lines
+                .weight(1f) // Give weight to question/answer areas
                 .border(1.dp, MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.medium)
                 .padding(8.dp)
                 .verticalScroll(questionScroll)
@@ -1040,25 +1069,24 @@ fun ShuffleFlashcardScreen(
                 style = MaterialTheme.typography.bodyLarge
             )
         }
-        
-        // Show Image Button (Question)
+
         if (!flashcard.questionImageUrl.isNullOrBlank()) {
             Spacer(Modifier.height(4.dp))
             Button(onClick = { viewingImage = flashcard.questionImageUrl }, modifier = Modifier.fillMaxWidth(0.5f)) {
-                Text("View Question Image")
+                Text("View Image")
             }
         }
 
-        // ANSWER
+        Spacer(Modifier.height(16.dp))
+
         if (showAnswer) {
-            Spacer(Modifier.height(24.dp))
             Text("Answer:", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(Modifier.height(6.dp))
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp) // ~3 lines
+                    .weight(1f)
                     .border(1.dp, MaterialTheme.colorScheme.secondary, shape = MaterialTheme.shapes.medium)
                     .padding(8.dp)
                     .verticalScroll(answerScroll)
@@ -1068,29 +1096,118 @@ fun ShuffleFlashcardScreen(
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
-            
-            // Show Image Button (Answer)
+
             if (!flashcard.answerImageUrl.isNullOrBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Button(onClick = { viewingImage = flashcard.answerImageUrl }, modifier = Modifier.fillMaxWidth(0.5f)) {
-                    Text("View Answer Image")
+                    Text("View Image")
                 }
             }
+        } else {
+             // Placeholder logic to keep layout stable or just empty space
+             Spacer(modifier = Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(24.dp))
 
-        // Buttons
         if (!showAnswer) {
             Button(onClick = onShowAnswer, modifier = Modifier.fillMaxWidth()) {
                 Text("Show Answer")
             }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onEndSession, modifier = Modifier.fillMaxWidth()) { Text("End Session") }
+        } else {
+            // Buttons: X (Red) and Check (Green)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Button(
+                    onClick = onWrong,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Wrong", tint = Color.White)
+                }
+
+                Button(
+                    onClick = onCorrect,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+                ) {
+                    Icon(androidx.compose.material.icons.Icons.Default.Check, contentDescription = "Correct", tint = Color.White)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            // "End Session" during answer phase
+            OutlinedButton(onClick = onEndSession, modifier = Modifier.fillMaxWidth()) { Text("End Session") }
+        }
+    }
+}
+
+@Composable
+fun SessionResultsScreen(
+    correct: Int,
+    wrong: Int,
+    total: Int,
+    onOk: () -> Unit
+) {
+    val accuracy = if (total > 0) (correct.toFloat() / total.toFloat()) * 100 else 0f
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Session Complete!", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(8.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                ResultRow(label = "Attempted", value = "$total")
+                ResultRow(label = "Correct", value = "$correct", color = Color(0xFF4CAF50)) // Green
+                ResultRow(label = "Wrong", value = "$wrong", color = Color(0xFFF44336))   // Red
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Accuracy", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "%.1f%%".format(accuracy),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
 
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("Next") }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onEndSession, modifier = Modifier.fillMaxWidth()) { Text("End Session") }
+        Spacer(Modifier.height(48.dp))
+
+        Button(
+            onClick = onOk,
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            Text("OK", fontSize = 18.sp)
+        }
+    }
+}
+
+@Composable
+fun ResultRow(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, fontSize = 18.sp)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 
