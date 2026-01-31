@@ -808,17 +808,20 @@ fun HelpScreen(onBack: () -> Unit) {
                     "• Open Flashcards from the Home screen.\n" +
                             "• Add new topic.\n" +
                             "• Add new flashcard to a topic.\n" +
+                            "• You can also add images as questions or answers.\n" +
                             "• Share your topics and import others.\n" +
                             "• Use Shuffle All to test yourself.\n" +
                             "• Use List View to show all the flashcards, you can also delete from this list."
-                            //"• 'Next Card' picks another random question."
-                            //"• 'Add New Card' lets you add a new question-answer pair."
+
             )
 
             HelpFeatureCard(
                 title = "Timer",
                 description =
-                    "• Set minutes and seconds, then tap 'Start'.\n" +
+                    "• Choose 'One Time' or 'Repetitive Timer.'\n" +
+                            "• Set hours, minutes and seconds, then tap 'Start'.\n" +
+                            "• In repetitive time set both focus and break time and number of cycles.\n" +
+                            "• Check the box to enable DND mode.\n" +
                             "• Use Pause / Resume to control the countdown.\n" +
                             "• Use Restart to set a new time.\n" +
                             "• The timer continues in the background."
@@ -827,9 +830,10 @@ fun HelpScreen(onBack: () -> Unit) {
             HelpFeatureCard(
                 title = "Scheduler",
                 description =
-                    "• Save events with title, description, hour and minute.\n" +
-                            "• The app shows a notification at the scheduled time.\n" +
-                            "• Future versions will persist events with Room/WorkManager."
+                    "• Choose 'Today's Schedule' or 'Tomorrow's Schedule' to see the scheduled events.\n" +
+                            "• Use 'Add Event' to add a new event.\n" +
+                            "• Save events with title, description, hour and minute.\n" +
+                            "• The app will show a notification at the scheduled time.\n"
             )
 
             HelpFeatureCard(
@@ -837,7 +841,12 @@ fun HelpScreen(onBack: () -> Unit) {
                 description =
                     "• Post questions and read others' questions.\n" +
                             "• Use 'Publish Question' to add a new one.\n" +
-                            "• Future versions will store data in a backend (MongoDB)."
+                            "• Ask a question with question title, question body and tag (image if needed)\n" +
+                            "• Use 'Find Question' to search for a question using a tag.\n"+
+                            "• Answer the question (you can answer with image also) or see other answers. \n" +
+                            "• Use 'Published Questions' to see the questions asked by you.\n" +
+                            "• Use 'Answered Questions' to see your answers."
+
             )
         }
     }
@@ -906,15 +915,10 @@ fun AboutScreen(onBack: () -> Unit) {
             Text("• 2022331057 - Banasree Pramanik")
             Text("• 2022331059 - Supto Das")
             Spacer(Modifier.height(16.dp))
+            Text("Contact Us", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text("rentstdbud999@gmail.com")
 
-
-
-            Spacer(Modifier.height(24.dp))
-            Text("Contact & Repo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text("Repository: https://github.com/rantidebRoy/Project2")
-            Spacer(Modifier.height(12.dp))
-            Text("This project is a progress-stage prototype — see project milestones for upcoming features like Room persistence, repetitive timers, and a full Q&A backend.")
-            Spacer(Modifier.height(24.dp))
         }
     }
 }
