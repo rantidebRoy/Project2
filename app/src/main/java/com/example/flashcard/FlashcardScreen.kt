@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.filled.Close
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 
 // --- Data Models ---
 data class Topic(
@@ -85,7 +87,16 @@ class FlashcardViewModel : ViewModel() {
                         id = fieldId ?: "",
                         name = doc.getString("name") ?: ""
                     )
-                }
+                }.sortedWith(Comparator { t1, t2 ->
+                    // Extract numeric suffix for correct "Old to New" sorting (e.g. f2 < f10)
+                    val n1 = t1.id.substringAfterLast("f").toIntOrNull()
+                    val n2 = t2.id.substringAfterLast("f").toIntOrNull()
+                    if (n1 != null && n2 != null) {
+                        n1.compareTo(n2)
+                    } else {
+                        t1.id.compareTo(t2.id)
+                    }
+                })
             }
     }
 
@@ -409,6 +420,8 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
     var correctCount by remember { mutableIntStateOf(0) }
     var wrongCount by remember { mutableIntStateOf(0) }
 
+    var selectedFlashcard by remember { mutableStateOf<Flashcard?>(null) } // New state for detail view
+
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -426,6 +439,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                             "list" -> viewModel.currentTopic?.name ?: ""
                             "addFlashcard" -> "Add Flashcard"
                             "import" -> "Import Topics"
+                            "detail" -> "Flashcard Detail"
                             else -> ""
                         }
                     )
@@ -442,6 +456,7 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                             "list" -> currentView = "topicOptions"
                             "addFlashcard" -> currentView = "topicOptions"
                             "import" -> currentView = "topics"
+                            "detail" -> currentView = "topicOptions"
                         }
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -547,8 +562,22 @@ fun FlashcardScreen(viewModel: FlashcardViewModel, onBack: () -> Unit) {
                         wrongCount = 0
                         currentView = "shuffle"
                     },
+                    onFlashcardClick = { card ->
+                        selectedFlashcard = card
+                        currentView = "detail"
+                    },
                     modifier = Modifier
                 )
+
+                // --- Flashcard Detail ---
+                "detail" -> {
+                    selectedFlashcard?.let { flashcard ->
+                        FlashcardDetailView(
+                            flashcard = flashcard,
+                            onBack = { currentView = "topicOptions" }
+                        )
+                    }
+                }
 
 
                 // --- Add Flashcard (stays the same) ---
@@ -742,7 +771,7 @@ fun ImportTopicsScreen(
     onImportSuccess: () -> Unit,
     onGlobalDeleteSuccess: () -> Unit
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(TextFieldValue("")) }
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) } // names
     var results by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) } // Pair(name, globalDocId)
     var loading by remember { mutableStateOf(false) }
@@ -750,10 +779,10 @@ fun ImportTopicsScreen(
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid
 
     // realtime prefix search for suggestions (max 3)
-    LaunchedEffect(query) {
-        if (query.isBlank()) { suggestions = emptyList(); return@LaunchedEffect }
-        val start = query
-        val end = query + '\uf8ff'
+    LaunchedEffect(query.text) {
+        if (query.text.isBlank()) { suggestions = emptyList(); return@LaunchedEffect }
+        val start = query.text
+        val end = query.text + '\uf8ff'
         db.collection("topic_tag")
             .whereGreaterThanOrEqualTo("name", start)
             .whereLessThanOrEqualTo("name", end)
@@ -764,6 +793,57 @@ fun ImportTopicsScreen(
                 suggestions = list.distinct().take(3)
             }
             .addOnFailureListener { suggestions = emptyList() }
+    }
+
+    // Helper to run search
+    fun searchTopics(searchText: String) {
+        if (searchText.isBlank()) { results = emptyList(); return }
+        loading = true
+        // Trim for the search query to be more robust if there are accidental spaces
+        val term = searchText.trim()
+        val start = term
+        val end = term + '\uf8ff'
+
+        db.collection("topic_tag")
+            .whereGreaterThanOrEqualTo("name", start)
+            .whereLessThanOrEqualTo("name", end)
+            .get()
+            .addOnSuccessListener { snap ->
+                val names = snap.documents.mapNotNull { it.get("name")?.toString() }.distinct()
+                if (names.isEmpty()) {
+                    results = emptyList(); loading = false; return@addOnSuccessListener
+                }
+                val chunks = names.chunked(10)
+                val tmpResults = mutableListOf<Pair<String, String>>()
+                var processed = 0
+                for (chunk in chunks) {
+                    db.collection("global_flashcards")
+                        .whereIn("name", chunk)
+                        .get()
+                        .addOnSuccessListener { gSnap ->
+                            for (gDoc in gSnap.documents) {
+                                val gname = gDoc.get("name")?.toString() ?: ""
+                                val gid = gDoc.id
+                                tmpResults.add(Pair(gname, gid))
+                            }
+                            processed++
+                            if (processed == chunks.size) {
+                                results = tmpResults
+                                loading = false
+                            }
+                        }
+                        .addOnFailureListener {
+                            processed++
+                            if (processed == chunks.size) {
+                                results = tmpResults
+                                loading = false
+                            }
+                        }
+                }
+            }
+            .addOnFailureListener {
+                results = emptyList(); loading = false
+            }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -786,8 +866,11 @@ fun ImportTopicsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    query = name
+                                    val newText = "$name "
+                                    query = TextFieldValue(newText, TextRange(newText.length))
                                     suggestions = emptyList()
+                                    // Trigger search immediately on the selected name
+                                    searchTopics(name)
                                 }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -802,50 +885,7 @@ fun ImportTopicsScreen(
         Spacer(Modifier.height(8.dp))
 
         Button(onClick = {
-            if (query.isBlank()) { results = emptyList(); return@Button }
-            loading = true
-            val start = query
-            val end = query + '\uf8ff'
-            db.collection("topic_tag")
-                .whereGreaterThanOrEqualTo("name", start)
-                .whereLessThanOrEqualTo("name", end)
-                .get()
-                .addOnSuccessListener { snap ->
-                    val names = snap.documents.mapNotNull { it.get("name")?.toString() }.distinct()
-                    if (names.isEmpty()) {
-                        results = emptyList(); loading = false; return@addOnSuccessListener
-                    }
-                    val chunks = names.chunked(10)
-                    val tmpResults = mutableListOf<Pair<String, String>>()
-                    var processed = 0
-                    for (chunk in chunks) {
-                        db.collection("global_flashcards")
-                            .whereIn("name", chunk)
-                            .get()
-                            .addOnSuccessListener { gSnap ->
-                                for (gDoc in gSnap.documents) {
-                                    val gname = gDoc.get("name")?.toString() ?: ""
-                                    val gid = gDoc.id
-                                    tmpResults.add(Pair(gname, gid))
-                                }
-                                processed++
-                                if (processed == chunks.size) {
-                                    results = tmpResults
-                                    loading = false
-                                }
-                            }
-                            .addOnFailureListener {
-                                processed++
-                                if (processed == chunks.size) {
-                                    results = tmpResults
-                                    loading = false
-                                }
-                            }
-                    }
-                }
-                .addOnFailureListener {
-                    results = emptyList(); loading = false
-                }
+            searchTopics(query.text)
         }, modifier = Modifier.fillMaxWidth()) {
             Text("Search")
         }
@@ -930,6 +970,7 @@ fun ImportTopicsScreen(
 fun TopicOptionsScreen(
     viewModel: FlashcardViewModel,
     onSelectShuffle: () -> Unit,
+    onFlashcardClick: (Flashcard) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val flashcards = viewModel.flashcards
@@ -948,7 +989,7 @@ fun TopicOptionsScreen(
         ) {
             items(flashcards) { card ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().clickable { onFlashcardClick(card) },
                     elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Row(
@@ -959,7 +1000,7 @@ fun TopicOptionsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
-                            Text("A: ${card.answer}")
+                            // Answer removed from list view
                         }
                         IconButton(onClick = { viewModel.deleteFlashcard(card.id) }) {
                             Icon(
@@ -1464,6 +1505,113 @@ fun AddFlashcardScreen(viewModel: FlashcardViewModel, onDone: () -> Unit, onCanc
             }
             
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun FlashcardDetailView(
+    flashcard: Flashcard,
+    onBack: () -> Unit
+) {
+    var viewingImage by remember { mutableStateOf<String?>(null) }
+
+    // Image Viewer Dialog
+    if (viewingImage != null) {
+        Dialog(onDismissRequest = { viewingImage = null }) {
+            var scale by remember { mutableStateOf(1f) }
+            var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+            val state = rememberTransformableState { zoomChange, panChange, _ ->
+                scale = (scale * zoomChange).coerceAtLeast(1f)
+                offset += panChange
+            }
+
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable { viewingImage = null }
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .transformable(state = state)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = viewingImage,
+                        contentDescription = "Full Image",
+                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+                IconButton(
+                    onClick = { viewingImage = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Question", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.medium)
+                .padding(16.dp)
+        ) {
+            Text(flashcard.question, fontSize = 18.sp)
+        }
+
+        if (!flashcard.questionImageUrl.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { viewingImage = flashcard.questionImageUrl }) {
+                Text("View Image")
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Text("Answer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.secondary, shape = MaterialTheme.shapes.medium)
+                .padding(16.dp)
+        ) {
+            Text(flashcard.answer, fontSize = 18.sp)
+        }
+
+        if (!flashcard.answerImageUrl.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { viewingImage = flashcard.answerImageUrl }) {
+                Text("View Image")
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            Text("Back to List")
         }
     }
 }
