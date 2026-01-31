@@ -18,6 +18,19 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.Close
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +44,8 @@ fun OtherAnswersListScreen(
 
     var otherAnswers by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var selectedAnswer by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var viewingImage by remember { mutableStateOf<String?>(null) }
 
     // Logged-in user's UID
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
@@ -76,9 +91,11 @@ fun OtherAnswersListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Previous Answers") },
+                title = { Text("Answers") },
                 navigationIcon = {
-                    IconButton(onClick = { onBack() }) {
+                    IconButton(onClick = {
+                        if (selectedAnswer != null) selectedAnswer = null else onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -86,12 +103,97 @@ fun OtherAnswersListScreen(
         }
     ) { paddingValues ->
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
+
+
+        if (viewingImage != null) {
+            Dialog(onDismissRequest = { viewingImage = null }) {
+                var scale by remember { mutableStateOf(1f) }
+                var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                val state = rememberTransformableState { zoomChange, panChange, _ ->
+                    scale = (scale * zoomChange).coerceAtLeast(1f)
+                    offset += panChange
+                }
+                Box(Modifier.fillMaxSize().clickable { viewingImage = null }) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .transformable(state = state)
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = viewingImage,
+                            contentDescription = "Full Image",
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewingImage = null },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+            }
+        }
+
+        if (selectedAnswer != null) {
+            val ans = selectedAnswer!!
+            val answererId = (ans["answerer_id"] as? Long)?.toInt()
+                ?: ans["answerer_id"]?.toString()?.toIntOrNull()
+            val displayName = if (answererId != null && answererId == mySequentialId) "me" else answererId?.toString() ?: "Unknown"
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+            ) {
+                Text("Answer by: $displayName", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                        .padding(8.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(ans["answer_body"]?.toString() ?: "(Empty)")
+                }
+                Spacer(Modifier.height(16.dp))
+
+                val imgUrl = ans["imageUrl"]?.toString()
+                if (!imgUrl.isNullOrBlank()) {
+                    Button(
+                        onClick = { viewingImage = imgUrl },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Show Image")
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Click an option to view to answer in detail",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .align(Alignment.CenterHorizontally)
+                )
 
             if (loading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -117,6 +219,7 @@ fun OtherAnswersListScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(8.dp)
+                                .clickable { selectedAnswer = ans }
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
 
@@ -166,8 +269,10 @@ fun OtherAnswersListScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Text(
-                                    ans["answer_body"]?.toString() ?: "(Empty)",
-                                    style = MaterialTheme.typography.bodyMedium
+                                    text = ans["answer_body"]?.toString() ?: "(Empty)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -197,6 +302,7 @@ fun OtherAnswersListScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
+            }
             }
         }
     }

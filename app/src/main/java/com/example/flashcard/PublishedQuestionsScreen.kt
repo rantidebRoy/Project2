@@ -14,10 +14,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.filled.Close
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.compose.ui.text.style.TextOverflow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +46,8 @@ fun PublishedQuestionsScreen(
     var userId by remember { mutableStateOf<Long?>(null) }
     var publishedQuestions by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var selectedQuestion by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var viewingImage by remember { mutableStateOf<String?>(null) }
 
     // --- Fetch user's sequential id ---
     LaunchedEffect(user?.uid) {
@@ -75,7 +90,13 @@ fun PublishedQuestionsScreen(
             TopAppBar(
                 title = { Text("Published Questions") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (selectedQuestion != null) {
+                            selectedQuestion = null
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -88,7 +109,106 @@ fun PublishedQuestionsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            if (viewingImage != null) {
+                Dialog(onDismissRequest = { viewingImage = null }) {
+                    var scale by remember { mutableStateOf(1f) }
+                    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                    val state = rememberTransformableState { zoomChange, panChange, _ ->
+                        scale = (scale * zoomChange).coerceAtLeast(1f)
+                        offset += panChange
+                    }
+                    Box(Modifier.fillMaxSize().clickable { viewingImage = null }) {
+                        Box(
+                            Modifier.fillMaxSize()
+                                .transformable(state = state)
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offset.x,
+                                    translationY = offset.y
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = viewingImage,
+                                contentDescription = "Full Image",
+                                modifier = Modifier.fillMaxWidth(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewingImage = null },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                        }
+                    }
+                }
+            }
+
             when {
+                selectedQuestion != null -> {
+                    val q = selectedQuestion!!
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Title
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(60.dp)
+                                .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                                .padding(8.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = q["title"]?.toString() ?: "(No Title)",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+
+                        // Body
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                                .padding(8.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = q["body"]?.toString() ?: "(No Body)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+
+                        // Image
+                        val imgUrl = q["imageUrl"]?.toString()
+                        if (!imgUrl.isNullOrBlank()) {
+                            Button(
+                                onClick = { viewingImage = imgUrl },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Show Image")
+                            }
+                            Spacer(Modifier.height(16.dp))
+                        }
+
+                        // Previous Answers
+                        Button(
+                            onClick = { onOpenAnswers(q["docId"].toString()) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Answers")
+                        }
+                    }
+                }
+
                 isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
@@ -118,7 +238,7 @@ fun PublishedQuestionsScreen(
                                     .fillMaxWidth()
                                     .padding(vertical = 8.dp)
                                     .clickable {
-                                        onOpenAnswers(docId)   // ⭐ OPEN SAME ANSWER SCREEN
+                                        selectedQuestion = question
                                     }
                             ) {
                                 Column(
@@ -135,17 +255,23 @@ fun PublishedQuestionsScreen(
                                         Column {
                                             Text(
                                                 text = question["title"]?.toString() ?: "(No Title)",
-                                                style = MaterialTheme.typography.titleMedium
+                                                style = MaterialTheme.typography.titleMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 text = question["body"]?.toString() ?: "(No Body)",
-                                                style = MaterialTheme.typography.bodyMedium
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 4,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 text = "Tag: ${question["tag"] ?: "N/A"}",
-                                                style = MaterialTheme.typography.labelMedium
+                                                style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
 

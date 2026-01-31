@@ -4,6 +4,9 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,8 +24,19 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import coil.compose.AsyncImage
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.Close
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,30 +65,54 @@ fun AnswerQuestionScreen(
     }
 
     // Search state
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchQuery by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var tagSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
     // Selected question
     var selectedQuestion by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var selectedAnswer by remember { mutableStateOf<Map<String, Any>?>(null) }
     var subView by remember { mutableStateOf("main") }
 
     // Other answers
     var otherAnswers by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var loadingOthers by remember { mutableStateOf(false) }
 
+    // Helper to perform search
+    fun performSearch(queryText: String) {
+        if (queryText.isBlank()) {
+            Toast.makeText(context, "Enter a tag", Toast.LENGTH_SHORT).show()
+            return
+        }
+        isLoading = true
+        scope.launch {
+            try {
+                val snapshot = db.collection("questions")
+                    .whereEqualTo("tag", queryText.trim())
+                    .get()
+                    .await()
+
+                searchResults = snapshot.documents.mapNotNull {
+                    it.data?.plus("id" to it.id)
+                }
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     // ---------------- TAG SUGGESTIONS ----------------
-    LaunchedEffect(searchQuery) {
-        if (searchQuery.isBlank()) {
+    LaunchedEffect(searchQuery.text) {
+        if (searchQuery.text.isBlank()) {
             tagSuggestions = emptyList()
             return@LaunchedEffect
         }
 
         try {
             val snapshot = db.collection("qna_tag")
-                .whereGreaterThanOrEqualTo("name", searchQuery)
-                .whereLessThanOrEqualTo("name", searchQuery + "\uf8ff")
+                .whereGreaterThanOrEqualTo("name", searchQuery.text)
+                .whereLessThanOrEqualTo("name", searchQuery.text + "\uf8ff")
                 .limit(3)
                 .get()
                 .await()
@@ -92,6 +130,9 @@ fun AnswerQuestionScreen(
                     IconButton(onClick = {
                         when (subView) {
                             "main" -> onBack()
+                            "question_detail" -> subView = "main"
+                            "others_answers" -> subView = "question_detail"
+                            "answer_detail" -> subView = "others_answers"
                             else -> subView = "main"
                         }
                     }) {
@@ -101,6 +142,54 @@ fun AnswerQuestionScreen(
             )
         }
     ) { paddingValues ->
+
+        var viewingImage by remember { mutableStateOf<String?>(null) }
+
+        // --- Image Viewer Dialog ---
+        if (viewingImage != null) {
+            Dialog(onDismissRequest = { viewingImage = null }) {
+                var scale by remember { mutableStateOf(1f) }
+                var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                val state = rememberTransformableState { zoomChange, panChange, _ ->
+                    scale = (scale * zoomChange).coerceAtLeast(1f)
+                    offset += panChange
+                }
+
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clickable { viewingImage = null }
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .transformable(state = state)
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = viewingImage,
+                            contentDescription = "Full Image",
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewingImage = null },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -137,24 +226,10 @@ fun AnswerQuestionScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    searchQuery = tag
+                                                    val newText = "$tag "
+                                                    searchQuery = TextFieldValue(newText, TextRange(newText.length))
                                                     tagSuggestions = emptyList()
-
-                                                    isLoading = true
-                                                    scope.launch {
-                                                        try {
-                                                            val snapshot = db.collection("questions")
-                                                                .whereEqualTo("tag", tag)
-                                                                .get()
-                                                                .await()
-
-                                                            searchResults = snapshot.documents.mapNotNull {
-                                                                it.data?.plus("id" to it.id)
-                                                            }
-                                                        } finally {
-                                                            isLoading = false
-                                                        }
-                                                    }
+                                                    performSearch(tag)
                                                 }
                                                 .padding(12.dp)
                                         ) {
@@ -168,28 +243,7 @@ fun AnswerQuestionScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
-                            onClick = {
-                                if (searchQuery.isBlank()) {
-                                    Toast.makeText(context, "Enter a tag", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-
-                                isLoading = true
-                                scope.launch {
-                                    try {
-                                        val snapshot = db.collection("questions")
-                                            .whereEqualTo("tag", searchQuery.trim())
-                                            .get()
-                                            .await()
-
-                                        searchResults = snapshot.documents.mapNotNull {
-                                            it.data?.plus("id" to it.id)
-                                        }
-                                    } finally {
-                                        isLoading = false
-                                    }
-                                }
-                            },
+                            onClick = { performSearch(searchQuery.text) },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Search") }
 
@@ -210,8 +264,19 @@ fun AnswerQuestionScreen(
                                             }
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {
-                                            Text(q["title"].toString())
-                                            Text(q["body"].toString())
+                                            Text(
+                                                text = q["title"].toString(),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = q["body"].toString(),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 4,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
@@ -225,10 +290,37 @@ fun AnswerQuestionScreen(
                     selectedQuestion?.let { question ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-                            Text(question["title"].toString(), style = MaterialTheme.typography.titleLarge)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(60.dp)
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                                    .padding(8.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text(question["title"].toString(), style = MaterialTheme.typography.titleLarge)
+                            }
                             Spacer(Modifier.height(8.dp))
-                            Text(question["body"].toString())
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp)
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                                    .padding(8.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text(question["body"].toString())
+                            }
                             Spacer(Modifier.height(16.dp))
+
+                            val imageUrl = question["imageUrl"]?.toString()
+                            if (!imageUrl.isNullOrBlank()) {
+                                Button(
+                                    onClick = { viewingImage = imageUrl },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("View Question Image") }
+                                Spacer(Modifier.height(12.dp))
+                            }
 
                             Button(
                                 onClick = {
@@ -248,6 +340,7 @@ fun AnswerQuestionScreen(
                                             val snapshot = db.collection("questions")
                                                 .document(question["id"].toString())
                                                 .collection("answers")
+                                                .orderBy("timestamp", Query.Direction.DESCENDING)
                                                 .get()
                                                 .await()
 
@@ -268,6 +361,14 @@ fun AnswerQuestionScreen(
                 // ---------------- OTHER ANSWERS ----------------
                 "others_answers" -> {
                     Column {
+                        Text(
+                            text = "Click an option to view the answer in detail",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .align(Alignment.CenterHorizontally)
+                        )
 
                         if (loadingOthers) {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -287,6 +388,10 @@ fun AnswerQuestionScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(8.dp)
+                                            .clickable {
+                                                selectedAnswer = ans
+                                                subView = "answer_detail"
+                                            }
                                     ) {
                                         Column(Modifier.padding(16.dp)) {
 
@@ -324,14 +429,18 @@ fun AnswerQuestionScreen(
                                                         Icon(
                                                             Icons.Default.Delete,
                                                             contentDescription = "Delete Answer",
-                                                            tint = Color.Red
+                                                            tint = Color.Black
                                                         )
                                                     }
                                                 }
                                             }
 
                                             Spacer(Modifier.height(4.dp))
-                                            Text(ans["answer_body"].toString())
+                                            Text(
+                                                text = ans["answer_body"].toString(),
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
@@ -347,6 +456,43 @@ fun AnswerQuestionScreen(
                                 modifier = Modifier.align(Alignment.CenterHorizontally),
                                 color = Color.Gray
                             )
+                        }
+                        }
+                    }
+
+                // ---------------- ANSWER DETAIL ----------------
+                "answer_detail" ->  {
+                    selectedAnswer?.let { ans ->
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "Answer by: " + (ans["answerer_id"]?.toString() ?: "Unknown"),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(Modifier.height(16.dp))
+
+                            // 5 line tall scrollable box (~120dp)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp)
+                                    .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                                    .padding(8.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text(ans["answer_body"].toString())
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            val imgUrl = ans["imageUrl"]?.toString()
+                            if (!imgUrl.isNullOrBlank()) {
+                                Button(
+                                    onClick = { viewingImage = imgUrl },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("View Answer Image")
+                                }
+                            }
                         }
                     }
                 }
