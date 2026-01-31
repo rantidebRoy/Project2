@@ -113,18 +113,33 @@ fun SchedulerScreen(onBack: () -> Unit) {
             onBack = { currentView = "main" },
             onSave = { title, description, date, hour, minute ->
                 if (userId.isNotEmpty()) {
+                    val calendar = java.util.Calendar.getInstance()
+                    if (date == "tomorrow") {
+                        calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                    }
+                    // Set time to the event time or just keep the date part logic? 
+                    // Requirement says "before 12.00 am" implying midnight of that day.
+                    // We just store the creation/target timestamp to help calculate deadlines if needed, 
+                    // or simply rely on "date" string and current time check.
+                    // Let's store the target event time as timestamp for easier comparison.
+                    calendar.set(java.util.Calendar.HOUR_OF_DAY, hour)
+                    calendar.set(java.util.Calendar.MINUTE, minute)
+                    calendar.set(java.util.Calendar.SECOND, 0)
+                    
                     val event = mapOf(
                         "title" to title,
                         "description" to description,
                         "date" to date,
                         "hour" to hour,
-                        "minute" to minute
+                        "minute" to minute,
+                        "isChecked" to false,
+                        "timestamp" to calendar.timeInMillis
                     )
                     db.collection("users")
                         .document(userId)
                         .collection("events")
                         .add(event)
-                        .addOnSuccessListener {
+                        .addOnSuccessListener { docRef ->
                             Toast.makeText(context, "Event saved!", Toast.LENGTH_SHORT).show()
 
                             NotificationScheduler.scheduleEvent(
@@ -133,7 +148,9 @@ fun SchedulerScreen(onBack: () -> Unit) {
                                 description = description,
                                 dateType = date,
                                 hour = hour,
-                                minute = minute
+                                minute = minute,
+                                docId = docRef.id,
+                                userId = userId
                             )
 
                             currentView = "main"
@@ -151,24 +168,32 @@ fun SchedulerScreen(onBack: () -> Unit) {
         "today", "tomorrow" -> {
             var events by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
 
-            LaunchedEffect(dateFilter) {
+            DisposableEffect(dateFilter) {
+                var listener: com.google.firebase.firestore.ListenerRegistration? = null
+                
                 if (userId.isNotEmpty()) {
-                    db.collection("users")
+                     listener = db.collection("users")
                         .document(userId)
                         .collection("events")
                         .whereEqualTo("date", dateFilter)
-                        .get()
-                        .addOnSuccessListener { snapshot ->
-                            events = snapshot.documents.mapNotNull { doc ->
-                                val data = doc.data ?: return@mapNotNull null
-                                val hour = (data["hour"] as? Long ?: 0L).toInt()
-                                val minute = (data["minute"] as? Long ?: 0L).toInt()
-                                data + ("docId" to doc.id) + ("sortTime" to hour * 60 + minute)
-                            }.sortedBy { it["sortTime"] as Int }
+                        .addSnapshotListener { snapshot, e ->
+                            if (e != null) {
+                                Toast.makeText(context, "Failed to load events", Toast.LENGTH_SHORT).show()
+                                return@addSnapshotListener
+                            }
+                            if (snapshot != null) {
+                                events = snapshot.documents.mapNotNull { doc ->
+                                    val data = doc.data ?: return@mapNotNull null
+                                    val hour = (data["hour"] as? Long ?: 0L).toInt()
+                                    val minute = (data["minute"] as? Long ?: 0L).toInt()
+                                    data + ("docId" to doc.id) + ("sortTime" to hour * 60 + minute)
+                                }.sortedBy { it["sortTime"] as Int }
+                            }
                         }
-                        .addOnFailureListener {
-                            Toast.makeText(context, "Failed to load events", Toast.LENGTH_SHORT).show()
-                        }
+                }
+                
+                onDispose {
+                    listener?.remove()
                 }
             }
 
@@ -206,6 +231,9 @@ fun SchedulerScreen(onBack: () -> Unit) {
                         LazyColumn {
                             items(events.size) { index ->
                                 val event = events[index]
+                                val docId = event["docId"] as? String ?: ""
+                                val isChecked = event["isChecked"] as? Boolean ?: false
+                                
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -220,9 +248,33 @@ fun SchedulerScreen(onBack: () -> Unit) {
                                     shape = RoundedCornerShape(16.dp),
                                     elevation = CardDefaults.cardElevation(2.dp)
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(16.dp)
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        // Auto-tick logic kept (via Notification), but Manual tick also allowed.
+                                        if (dateFilter == "today") {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { checked ->
+                                                    if (userId.isNotEmpty() && docId.isNotEmpty()) {
+                                                        db.collection("users")
+                                                            .document(userId)
+                                                            .collection("events")
+                                                            .document(docId)
+                                                            .update("isChecked", checked)
+                                                            .addOnSuccessListener {
+                                                                // Update local list
+                                                                events = events.map { 
+                                                                    if (it["docId"] == docId) it + ("isChecked" to checked) else it
+                                                                }
+                                                            }
+                                                    }
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                        
                                         Text(
                                             text = event["title"] as? String ?: "",
                                             style = MaterialTheme.typography.titleMedium,
@@ -325,6 +377,20 @@ fun SchedulerScreen(onBack: () -> Unit) {
                             "Time: $timeStr",
                             style = MaterialTheme.typography.bodyMedium
                         )
+                        Spacer(Modifier.height(24.dp))
+                        
+                        val isChecked = event["isChecked"] as? Boolean ?: false
+                        val titleVal = event["title"] as? String ?: "Task"
+                        
+                        if (isChecked) {
+                            Text(
+                                text = "The task has been accomplished",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    color = Color(0xFF4CAF50), // Green
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -451,8 +517,14 @@ fun AddEventScreen(
                 onClick = {
                     val hourInt = hour.toIntOrNull() ?: 0
                     val minuteInt = minute.toIntOrNull() ?: 0
-                    if (title.isNotBlank() && description.isNotBlank()) {
-                        onSave(title, description, date, hourInt, minuteInt)
+                    // Fix: Check if hour and minute strings are actually filled
+                    if (title.isNotBlank() && description.isNotBlank() && hour.isNotBlank() && minute.isNotBlank()) {
+                         // Validate time range
+                        if (hourInt in 0..23 && minuteInt in 0..59) {
+                            onSave(title, description, date, hourInt, minuteInt)
+                        } else {
+                            Toast.makeText(context, "Invalid time", Toast.LENGTH_SHORT).show()
+                        }
                     } else {
                         Toast.makeText(context, "Fill all fields", Toast.LENGTH_SHORT).show()
                     }

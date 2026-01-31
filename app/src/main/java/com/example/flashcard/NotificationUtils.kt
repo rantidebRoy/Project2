@@ -16,13 +16,44 @@ import java.util.Calendar
 // ----------------------------------------
 // 1. The Receiver (Shows the Notification)
 // ----------------------------------------
+// ----------------------------------------
+// 1. The Receiver (Shows the Notification)
+// ----------------------------------------
 class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val pendingResult = goAsync()
+        
         val title = intent.getStringExtra("title") ?: "Study Reminder"
         val message = intent.getStringExtra("message") ?: "Time to study!"
         val notificationId = intent.getIntExtra("id", 0)
+        val docId = intent.getStringExtra("docId")
+        val userId = intent.getStringExtra("userId")
 
         Log.d("NotificationReceiver", "Received event: $title (ID: $notificationId)")
+
+        // Automatically mark as accomplished in Firestore
+        if (!docId.isNullOrEmpty() && !userId.isNullOrEmpty()) {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("users")
+                .document(userId)
+                .collection("events")
+                .document(docId)
+                .update("isChecked", true)
+                .addOnSuccessListener {
+                    Log.d("NotificationReceiver", "Event auto-checked: $docId")
+                    // Show Notification after success? Or parallel? 
+                    // Better to show notification regardless of DB success, but finish async after.
+                }
+                .addOnFailureListener { e ->
+                    Log.e("NotificationReceiver", "Failed to auto-check event", e)
+                }
+                .addOnCompleteListener {
+                    // Must finish the async operation
+                    pendingResult.finish()
+                }
+        } else {
+            pendingResult.finish()
+        }
 
         // Create an intent to open the app when clicking the notification
         val activityIntent = Intent(context, MainActivity::class.java).apply {
@@ -64,7 +95,9 @@ object NotificationScheduler {
         description: String,
         dateType: String,
         hour: Int,
-        minute: Int
+        minute: Int,
+        docId: String? = null,
+        userId: String? = null
     ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -104,6 +137,8 @@ object NotificationScheduler {
             putExtra("title", title)
             putExtra("message", description)
             putExtra("id", notificationId)
+            putExtra("docId", docId)
+            putExtra("userId", userId)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
