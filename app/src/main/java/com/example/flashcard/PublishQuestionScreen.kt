@@ -67,10 +67,11 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
             return@LaunchedEffect
         }
 
+        val termLower = tag.lowercase().trim()
         val result = db.collection("qna_tag")
-            .whereGreaterThanOrEqualTo("name", tag)
-            .whereLessThanOrEqualTo("name", tag + "\uf8ff")
-            .limit(3)
+            .whereGreaterThanOrEqualTo("name_lowercase", termLower)
+            .whereLessThanOrEqualTo("name_lowercase", termLower + "\uf8ff")
+            .limit(10)
             .get()
             .await()
 
@@ -105,12 +106,16 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
                                 isUploading = true
 
                                 fun saveQuestion(imageUrl: String?) {
+                                    val tagLower = tag.lowercase().trim()
                                     db.collection("qna_tag")
-                                        .whereEqualTo("name", tag)
+                                        .whereEqualTo("name_lowercase", tagLower)
                                         .get()
                                         .addOnSuccessListener { snapshot ->
                                             if (snapshot.isEmpty) {
-                                                val newTag = hashMapOf("name" to tag)
+                                                val newTag = hashMapOf(
+                                                    "name" to tag,
+                                                    "name_lowercase" to tagLower
+                                                )
                                                 db.collection("qna_tag").add(newTag)
                                             }
 
@@ -118,6 +123,7 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
                                                 "title" to title,
                                                 "body" to body,
                                                 "tag" to tag,
+                                                "tag_lowercase" to tagLower,
                                                 "owner_id" to sequentialId,
                                                 "imageUrl" to imageUrl
                                             )
@@ -230,7 +236,7 @@ fun PublishQuestionScreen(onBack: () -> Unit) {
                     onDismissRequest = { showDropdown = false },
                     modifier = Modifier
                         .background(Color.White)
-                        .heightIn(max = 150.dp)
+                        .heightIn(max = 144.dp)
                 ) {
                     suggestions.forEach { suggestion ->
                         DropdownMenuItem(

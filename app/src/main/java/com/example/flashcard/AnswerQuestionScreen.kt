@@ -69,6 +69,7 @@ fun AnswerQuestionScreen(
     var tagSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var showSuggestions by remember { mutableStateOf(false) }
 
     // Selected question
     var selectedQuestion by remember { mutableStateOf<Map<String, Any>?>(null) }
@@ -81,6 +82,7 @@ fun AnswerQuestionScreen(
 
     // Helper to perform search
     fun performSearch(queryText: String) {
+        showSuggestions = false
         if (queryText.isBlank()) {
             Toast.makeText(context, "Enter a tag", Toast.LENGTH_SHORT).show()
             return
@@ -88,8 +90,9 @@ fun AnswerQuestionScreen(
         isLoading = true
         scope.launch {
             try {
+                val termLower = queryText.trim().lowercase()
                 val snapshot = db.collection("questions")
-                    .whereEqualTo("tag", queryText.trim())
+                    .whereEqualTo("tag_lowercase", termLower)
                     .get()
                     .await()
 
@@ -104,16 +107,17 @@ fun AnswerQuestionScreen(
 
     // ---------------- TAG SUGGESTIONS ----------------
     LaunchedEffect(searchQuery.text) {
-        if (searchQuery.text.isBlank()) {
-            tagSuggestions = emptyList()
+        if (!showSuggestions || searchQuery.text.isBlank()) {
+            if (searchQuery.text.isBlank()) tagSuggestions = emptyList()
             return@LaunchedEffect
         }
 
         try {
+            val termLower = searchQuery.text.lowercase().trim()
             val snapshot = db.collection("qna_tag")
-                .whereGreaterThanOrEqualTo("name", searchQuery.text)
-                .whereLessThanOrEqualTo("name", searchQuery.text + "\uf8ff")
-                .limit(3)
+                .whereGreaterThanOrEqualTo("name_lowercase", termLower)
+                .whereLessThanOrEqualTo("name_lowercase", termLower + "\uf8ff")
+                .limit(10)
                 .get()
                 .await()
 
@@ -206,12 +210,15 @@ fun AnswerQuestionScreen(
 
                         OutlinedTextField(
                             value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            onValueChange = { 
+                                searchQuery = it
+                                showSuggestions = true
+                            },
                             label = { Text("Enter tag") },
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        if (tagSuggestions.isNotEmpty()) {
+                        if (showSuggestions && tagSuggestions.isNotEmpty()) {
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -219,19 +226,22 @@ fun AnswerQuestionScreen(
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 LazyColumn(
-                                    modifier = Modifier.heightIn(max = 150.dp)
+                                    modifier = Modifier.heightIn(max = 144.dp)
                                 ) {
                                     items(tagSuggestions) { tag ->
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .height(48.dp)
                                                 .clickable {
                                                     val newText = "$tag "
                                                     searchQuery = TextFieldValue(newText, TextRange(newText.length))
+                                                    showSuggestions = false
                                                     tagSuggestions = emptyList()
                                                     performSearch(tag)
                                                 }
-                                                .padding(12.dp)
+                                                .padding(horizontal = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(tag)
                                         }
@@ -304,7 +314,7 @@ fun AnswerQuestionScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(100.dp)
+                                    .height(110.dp)
                                     .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
                                     .padding(8.dp)
                                     .verticalScroll(rememberScrollState())
@@ -470,11 +480,11 @@ fun AnswerQuestionScreen(
                             )
                             Spacer(Modifier.height(16.dp))
 
-                            // 5 line tall scrollable box (~120dp)
+                            // 4 line tall scrollable box (~110dp)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(120.dp)
+                                    .height(110.dp)
                                     .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
                                     .padding(8.dp)
                                     .verticalScroll(rememberScrollState())

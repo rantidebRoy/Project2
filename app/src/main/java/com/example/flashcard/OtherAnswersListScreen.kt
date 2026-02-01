@@ -160,7 +160,7 @@ fun OtherAnswersListScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp)
+                        .height(110.dp)
                         .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
                         .padding(8.dp)
                         .verticalScroll(rememberScrollState())

@@ -832,7 +832,7 @@ fun ImportTopicsScreen(
             .get()
             .addOnSuccessListener { snap ->
                 val list = snap.documents.mapNotNull { it.get("name")?.toString() }
-                suggestions = list.distinct().take(3)
+                suggestions = list.distinct()
             }
             .addOnFailureListener { suggestions = emptyList() }
     }
@@ -904,12 +904,18 @@ fun ImportTopicsScreen(
 
         if (showSuggestions && suggestions.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Card(modifier = Modifier.fillMaxWidth().heightIn(max = (48.dp * suggestions.size))) {
-                LazyColumn {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 144.dp)
+                ) {
                     items(suggestions) { name ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .height(48.dp)
                                 .clickable {
                                     val newText = "$name "
                                     query = TextFieldValue(newText, TextRange(newText.length))
@@ -918,7 +924,7 @@ fun ImportTopicsScreen(
                                     // Trigger search immediately on the selected name
                                     searchTopics(name)
                                 }
-                                .padding(12.dp),
+                                .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(name)
