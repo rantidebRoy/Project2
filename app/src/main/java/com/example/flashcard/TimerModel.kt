@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.core.app.NotificationCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -85,22 +86,33 @@ class TimerModel : ViewModel() {
             currentPhase = RepetitivePhase.FOCUS
             remainingTimeMillis = focusMillis
 
-            // Enable DND immediately for the first Focus phase
-            if (enableDND) enableDND(context)
-
             timerState = TimerState.RUNNING
-            startCountdown(true, focusMillis, breakMillis, context)
+            
+            viewModelScope.launch {
+                if (context != null) sendTimerNotification(context, "Study Buddy", "Focus time has started")
+                if (enableDND) {
+                    delay(1500) // Wait for notification sound
+                    enableDND(context)
+                }
+                startCountdown(true, focusMillis, breakMillis, context)
+            }
         }
     }
 
-    fun pauseTimer() {
+    fun pauseTimer(context: Context) {
         countdownJob?.cancel()
         timerState = TimerState.PAUSED
+        if (enableDND && currentPhase == RepetitivePhase.FOCUS) {
+            disableDND(context)
+        }
     }
 
     fun resumeTimer(context: Context) {
         timerState = TimerState.RUNNING
         if (timerMode == TimerMode.REPETITIVE) {
+            if (enableDND && currentPhase == RepetitivePhase.FOCUS) {
+                enableDND(context)
+            }
             val focusMillis = ((focusHours.toLongOrNull() ?: 0) * 3600 +
                     (focusMinutes.toLongOrNull() ?: 0) * 60 +
                     (focusSeconds.toLongOrNull() ?: 0)) * 1000
@@ -145,6 +157,7 @@ class TimerModel : ViewModel() {
                             if (currentCycle < total) {
                                 currentPhase = RepetitivePhase.BREAK
                                 remainingTimeMillis = breakMillis
+                                if (context != null) sendTimerNotification(context, "Study Buddy", "Break time has started")
                             } else {
                                 timerState = TimerState.FINISHED
                                 break
@@ -155,7 +168,11 @@ class TimerModel : ViewModel() {
                             if (currentCycle <= total) {
                                 currentPhase = RepetitivePhase.FOCUS
                                 remainingTimeMillis = focusMillis
-                                if (enableDND && context != null) enableDND(context)
+                                if (context != null) sendTimerNotification(context, "Study Buddy", "Focus time has started")
+                                if (enableDND && context != null) {
+                                    delay(1500) // Wait for notification sound before DND
+                                    enableDND(context)
+                                }
                             } else {
                                 timerState = TimerState.FINISHED
                                 break
@@ -163,6 +180,7 @@ class TimerModel : ViewModel() {
                         }
                     } else {
                         timerState = TimerState.FINISHED
+                        if (enableDND && context != null) disableDND(context)
                     }
                 }
             }
@@ -186,6 +204,18 @@ class TimerModel : ViewModel() {
         val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         context.startActivity(intent)
+    }
+
+    private fun sendTimerNotification(context: Context, title: String, message: String) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val builder = NotificationCompat.Builder(context, "scheduler_channel")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+
+        notificationManager.notify(1001, builder.build())
     }
 }
 
@@ -333,7 +363,7 @@ fun CountdownScreen(viewModel: TimerModel, context: Context) {
 
             IconButton(onClick = {
                 if (viewModel.timerState == TimerState.PAUSED) viewModel.resumeTimer(context)
-                else viewModel.pauseTimer()
+                else viewModel.pauseTimer(context)
             }) { Icon(icon, description, modifier = Modifier.size(48.dp)) }
 
             IconButton(onClick = { viewModel.resetTimer(context) }) {
