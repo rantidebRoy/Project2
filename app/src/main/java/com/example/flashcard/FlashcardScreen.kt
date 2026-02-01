@@ -299,6 +299,7 @@ class FlashcardViewModel : ViewModel() {
                                         val newTopicData = mapOf(
                                             "id" to topic.id,
                                             "name" to topic.name,
+                                            "name_lowercase" to topic.name.lowercase().trim(),
                                             "sharedBy" to uid,
                                             "timestamp" to System.currentTimeMillis()
                                         )
@@ -321,9 +322,12 @@ class FlashcardViewModel : ViewModel() {
                                                 batchAdd.commit()
                                                     .addOnSuccessListener {
                                                         // Write root-level topic_tag name only, avoid duplicates
-                                                        val tagData = mapOf("name" to topic.name)
+                                                        val tagData = mapOf(
+                                                            "name" to topic.name,
+                                                            "name_lowercase" to topic.name.lowercase().trim()
+                                                        )
                                                         db.collection("topic_tag")
-                                                            .whereEqualTo("name", topic.name)
+                                                            .whereEqualTo("name_lowercase", topic.name.lowercase().trim())
                                                             .get()
                                                             .addOnSuccessListener { existing ->
                                                                 if (existing.isEmpty) {
@@ -807,18 +811,23 @@ fun ImportTopicsScreen(
     var query by remember { mutableStateOf(TextFieldValue("")) }
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) } // names
     var results by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) } // Pair(name, globalDocId)
+    var showSuggestions by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
-    val db = FirebaseFirestore.getInstance()
-    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
 
     // realtime prefix search for suggestions (max 3)
     LaunchedEffect(query.text) {
-        if (query.text.isBlank()) { suggestions = emptyList(); return@LaunchedEffect }
-        val start = query.text
-        val end = query.text + '\uf8ff'
+        if (!showSuggestions || query.text.isBlank()) { 
+            if (query.text.isBlank()) suggestions = emptyList()
+            return@LaunchedEffect 
+        }
+        val termLower = query.text.lowercase().trim()
+        val start = termLower
+        val end = termLower + '\uf8ff'
         db.collection("topic_tag")
-            .whereGreaterThanOrEqualTo("name", start)
-            .whereLessThanOrEqualTo("name", end)
+            .whereGreaterThanOrEqualTo("name_lowercase", start)
+            .whereLessThanOrEqualTo("name_lowercase", end)
             .limit(10)
             .get()
             .addOnSuccessListener { snap ->
@@ -830,28 +839,28 @@ fun ImportTopicsScreen(
 
     // Helper to run search
     fun searchTopics(searchText: String) {
+        showSuggestions = false
         if (searchText.isBlank()) { results = emptyList(); return }
         loading = true
-        // Trim for the search query to be more robust if there are accidental spaces
-        val term = searchText.trim()
-        val start = term
-        val end = term + '\uf8ff'
+        val termLower = searchText.trim().lowercase()
+        val start = termLower
+        val end = termLower + '\uf8ff'
 
         db.collection("topic_tag")
-            .whereGreaterThanOrEqualTo("name", start)
-            .whereLessThanOrEqualTo("name", end)
+            .whereGreaterThanOrEqualTo("name_lowercase", start)
+            .whereLessThanOrEqualTo("name_lowercase", end)
             .get()
             .addOnSuccessListener { snap ->
-                val names = snap.documents.mapNotNull { it.get("name")?.toString() }.distinct()
-                if (names.isEmpty()) {
+                val namesLower = snap.documents.mapNotNull { it.get("name_lowercase")?.toString() }.distinct()
+                if (namesLower.isEmpty()) {
                     results = emptyList(); loading = false; return@addOnSuccessListener
                 }
-                val chunks = names.chunked(10)
+                val chunks = namesLower.chunked(10)
                 val tmpResults = mutableListOf<Pair<String, String>>()
                 var processed = 0
                 for (chunk in chunks) {
                     db.collection("global_flashcards")
-                        .whereIn("name", chunk)
+                        .whereIn("name_lowercase", chunk)
                         .get()
                         .addOnSuccessListener { gSnap ->
                             for (gDoc in gSnap.documents) {
@@ -885,12 +894,15 @@ fun ImportTopicsScreen(
 
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = { 
+                query = it
+                showSuggestions = true 
+            },
             label = { Text("Search topics") },
             modifier = Modifier.fillMaxWidth()
         )
 
-        if (suggestions.isNotEmpty()) {
+        if (showSuggestions && suggestions.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Card(modifier = Modifier.fillMaxWidth().heightIn(max = (48.dp * suggestions.size))) {
                 LazyColumn {
@@ -901,6 +913,7 @@ fun ImportTopicsScreen(
                                 .clickable {
                                     val newText = "$name "
                                     query = TextFieldValue(newText, TextRange(newText.length))
+                                    showSuggestions = false
                                     suggestions = emptyList()
                                     // Trigger search immediately on the selected name
                                     searchTopics(name)
