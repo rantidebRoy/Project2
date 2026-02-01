@@ -103,37 +103,69 @@ class FlashcardViewModel : ViewModel() {
     // --- Add Topic With Incremental ID Based on User's Own ID Field ---
     fun addTopic(name: String, onDone: () -> Unit, onFailure: (Exception) -> Unit = {}) {
         val uid = auth.currentUser?.uid ?: return
-
         val userRef = db.collection("users").document(uid)
         val topicsRef = userRef.collection("topics")
 
         userRef.get().addOnSuccessListener { userDoc ->
-            val userId = userDoc.get("id")?.toString() ?: return@addOnSuccessListener
+            if (!userDoc.exists()) {
+                onFailure(Exception("User profile not found in database."))
+                return@addOnSuccessListener
+            }
 
-            topicsRef.get().addOnSuccessListener { result ->
-                val existingNumbers = result.documents.mapNotNull { doc ->
-                    val fieldId = doc.get("id")?.toString() ?: doc.id
-                    if (fieldId.startsWith("${userId}f")) {
-                        fieldId.substringAfter("f").toIntOrNull()
-                    } else null
-                }
+            val userId = userDoc.get("id")?.toString()
+            if (userId == null) {
+                onFailure(Exception("User ID (numeric) is missing from your profile."))
+                return@addOnSuccessListener
+            }
 
-                val nextNumber = (existingNumbers.maxOrNull() ?: 0) + 1
-                val newTopicId = "${userId}f$nextNumber"
+            val existingCounter = userDoc.getLong("topicCounter")
 
-                val data = hashMapOf(
-                    "id" to newTopicId,
-                    "name" to name
-                )
-
-                topicsRef.document()
-                    .set(data)
-                    .addOnSuccessListener {
-                        loadTopics()
-                        onDone()
+            if (existingCounter == null) {
+                // --- MIGRATION LOGIC FOR OLD ACCOUNTS ---
+                // No Toast here to avoid flickering, but we do the work
+                topicsRef.get().addOnSuccessListener { result ->
+                    val existingNumbers = result.documents.mapNotNull { doc ->
+                        val fieldId = doc.get("id")?.toString() ?: doc.id
+                        if (fieldId.startsWith("${userId}f")) {
+                            fieldId.substringAfter("f").toIntOrNull()
+                        } else null
                     }
-                    .addOnFailureListener { e -> onFailure(e) }
-            }.addOnFailureListener { e -> onFailure(e) }
+                    val nextNum = (existingNumbers.maxOrNull() ?: 0) + 1L
+                    
+                    // Initialize the counter in the DB first
+                    userRef.update("topicCounter", nextNum).addOnSuccessListener {
+                        executeAddTopicTransaction(name, onDone, onFailure)
+                    }.addOnFailureListener { e -> onFailure(e) }
+                }.addOnFailureListener { e -> onFailure(e) }
+            } else {
+                // --- STANDARD LOGIC ---
+                executeAddTopicTransaction(name, onDone, onFailure)
+            }
+        }.addOnFailureListener { e -> onFailure(e) }
+    }
+
+    private fun executeAddTopicTransaction(name: String, onDone: () -> Unit, onFailure: (Exception) -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        val userRef = db.collection("users").document(uid)
+        val topicsRef = userRef.collection("topics")
+
+        db.runTransaction { transaction ->
+            val userDoc = transaction.get(userRef)
+            val userId = userDoc.get("id")?.toString() ?: throw Exception("Internal Error: User ID is null")
+            val nextNumber = userDoc.getLong("topicCounter") ?: 1L
+
+            val newTopicId = "${userId}f$nextNumber"
+            transaction.update(userRef, "topicCounter", nextNumber + 1)
+
+            val topicData = hashMapOf(
+                "id" to newTopicId,
+                "name" to name
+            )
+            transaction.set(topicsRef.document(), topicData)
+            null
+        }.addOnSuccessListener {
+            loadTopics()
+            onDone()
         }.addOnFailureListener { e -> onFailure(e) }
     }
 

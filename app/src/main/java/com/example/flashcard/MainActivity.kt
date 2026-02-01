@@ -696,7 +696,12 @@ fun registerUser(
                 val newId = currentCount + 1
 
                 transaction.set(counterRef, mapOf("userCount" to newId))
-                transaction.set(userRef, mapOf("id" to newId, "name" to name, "email" to email))
+                transaction.set(userRef, mapOf(
+                    "id" to newId, 
+                    "name" to name, 
+                    "email" to email,
+                    "topicCounter" to 1L
+                ))
 
                 newId
             }.addOnSuccessListener {
