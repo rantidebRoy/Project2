@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Close
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.style.TextOverflow
 
 // --- Data Models ---
 data class Topic(
@@ -1031,7 +1032,12 @@ fun TopicOptionsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Q: ${card.question}", fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Q: ${card.question}",
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             // Answer removed from list view
                         }
                         IconButton(onClick = { viewModel.deleteFlashcard(card.id) }) {
@@ -1606,7 +1612,9 @@ fun FlashcardDetailView(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(110.dp)
                 .border(1.dp, MaterialTheme.colorScheme.primary, shape = MaterialTheme.shapes.medium)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(flashcard.question, fontSize = 18.sp)
@@ -1627,7 +1635,9 @@ fun FlashcardDetailView(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(110.dp)
                 .border(1.dp, MaterialTheme.colorScheme.secondary, shape = MaterialTheme.shapes.medium)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(flashcard.answer, fontSize = 18.sp)
