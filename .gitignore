@@ -1,15 +1,21 @@
+# IntelliJ / Android Studio
+.idea/
+.kotlin/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.gradle/
 local.properties
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# User-specific
+*.hprof
+.DS_Store
+
+# Logs
+*.log
+
+# Sensitive Files
+google-services.json
