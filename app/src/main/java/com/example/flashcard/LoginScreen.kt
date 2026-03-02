@@ -1,0 +1,113 @@
+package com.example.flashcard
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LoginScreen(
+    viewModel: LoginViewModel = viewModel(),
+    onLoginSuccess: () -> Unit,
+    onNavigateToSignup: () -> Unit,
+    onNavigateToReset: () -> Unit      // <-- Added
+) {
+    val isLoading = viewModel.authState == AuthState.LOADING
+    val isInputValid = viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
+    val errorMessage = viewModel.errorMessage
+
+    LaunchedEffect(viewModel.authState) {
+        if (viewModel.authState == AuthState.SUCCESS) {
+            onLoginSuccess()
+            viewModel.resetState()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Log In") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("Welcome to Study Buddy", style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(32.dp))
+
+            OutlinedTextField(
+                value = viewModel.email,
+                onValueChange = { viewModel.email = it },
+                label = { Text("Email") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading,
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = viewModel.password,
+                onValueChange = { viewModel.password = it },
+                label = { Text("Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading,
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ******** NEW: RESET PASSWORD BUTTON ********
+            TextButton(onClick = onNavigateToReset) {
+                Text("Forgot Password?")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = { viewModel.login() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = isInputValid && !isLoading
+            ) {
+                Text("Log In")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            TextButton(
+                onClick = onNavigateToSignup,
+                enabled = !isLoading
+            ) {
+                Text("Don't have an account? Sign Up")
+            }
+
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator()
+            }
+
+            if (!errorMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+}
